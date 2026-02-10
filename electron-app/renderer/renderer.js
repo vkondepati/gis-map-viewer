@@ -100,6 +100,93 @@ function addGeoJSONLayer(geojson, name) {
   const li = document.createElement('li');
   li.textContent = name || 'GeoJSON layer';
   document.getElementById('layer-list').appendChild(li);
+
+  // populate attribute table for the loaded geojson
+  renderAttributeTable(geojson);
+}
+
+function renderAttributeTable(geojson) {
+  const tbody = document.getElementById('attr-tbody');
+  const thead = document.getElementById('attr-thead');
+  tbody.innerHTML = '';
+  thead.innerHTML = '';
+  if (!geojson || !geojson.features || geojson.features.length === 0) return;
+
+  // collect union of property keys
+  const keys = new Set();
+  geojson.features.forEach((f) => {
+    const p = f.properties || {};
+    Object.keys(p).forEach((k) => keys.add(k));
+  });
+  const keyList = Array.from(keys);
+
+  // header
+  const headerRow = document.createElement('tr');
+  const idxTh = document.createElement('th');
+  idxTh.textContent = '#';
+  headerRow.appendChild(idxTh);
+  keyList.forEach((k) => {
+    const th = document.createElement('th');
+    th.textContent = k;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+
+  // rows
+  geojson.features.forEach((f, i) => {
+    const tr = document.createElement('tr');
+    const idxTd = document.createElement('td');
+    idxTd.textContent = i + 1;
+    tr.appendChild(idxTd);
+    keyList.forEach((k) => {
+      const td = document.createElement('td');
+      td.contentEditable = true;
+      const val = f.properties && f.properties[k] !== undefined ? String(f.properties[k]) : '';
+      td.textContent = val;
+      td.dataset.key = k;
+      td.dataset.index = i;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  // show table
+  document.getElementById('attribute-table').style.display = 'block';
+}
+
+async function applyAttributeEdits() {
+  if (!lastGeoJSONLoaded || !lastGeoJSONLoaded.features) return;
+  const tbody = document.getElementById('attr-tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.forEach((tr) => {
+    const index = parseInt(tr.querySelector('td').textContent, 10) - 1;
+    const tds = Array.from(tr.querySelectorAll('td')).slice(1);
+    tds.forEach((td) => {
+      const key = td.dataset.key;
+      const val = td.textContent;
+      if (!lastGeoJSONLoaded.features[index].properties) lastGeoJSONLoaded.features[index].properties = {};
+      // Attempt to parse JSON values (numbers, objects), fallback to string
+      let parsed = val;
+      try { parsed = JSON.parse(val); } catch (e) { parsed = val; }
+      lastGeoJSONLoaded.features[index].properties[key] = parsed;
+    });
+  });
+
+  // reproject from known source CRS to map CRS before adding
+  const transformed = reprojectGeoJSON(lastGeoJSONLoaded, lastGeoJSONSourceCRS || document.getElementById('crs-select').value, 'EPSG:3857');
+  addGeoJSONLayer(transformed, 'edited');
+}
+
+async function exportGeoJSON() {
+  if (!lastGeoJSONLoaded) { alert('No GeoJSON loaded'); return; }
+  const content = JSON.stringify(lastGeoJSONLoaded, null, 2);
+  const defaultName = 'export.geojson';
+  const res = await window.electronAPI.saveGeoJSON(defaultName, content);
+  if (res && !res.canceled) {
+    alert('Saved to: ' + res.path);
+  } else if (res && res.error) {
+    alert('Save failed: ' + res.error);
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -140,4 +227,11 @@ window.addEventListener('DOMContentLoaded', () => {
       addGeoJSONLayer(transformed, 'reprojected');
     }
   });
+  // wire attribute table buttons
+  document.getElementById('toggle-attr').addEventListener('click', () => {
+    const el = document.getElementById('attribute-table');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('apply-attr-btn').addEventListener('click', () => applyAttributeEdits());
+  document.getElementById('export-btn').addEventListener('click', () => exportGeoJSON());
 });

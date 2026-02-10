@@ -40,3 +40,20 @@ ipcMain.handle('dialog:openFile', async () => {
   const content = fs.readFileSync(filePaths[0], 'utf8');
   return { canceled: false, path: filePaths[0], content };
 });
+
+ipcMain.handle('dialog:saveFile', async (event, { defaultName, content }) => {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath: defaultName || 'export.geojson',
+    filters: [
+      { name: 'GeoJSON', extensions: ['geojson', 'json'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (canceled || !filePath) return { canceled: true };
+  try {
+    fs.writeFileSync(filePath, content, 'utf8');
+    return { canceled: false, path: filePath };
+  } catch (err) {
+    return { canceled: true, error: err.message };
+  }
+});

@@ -23,6 +23,17 @@
           <h3>Layers</h3>
           <ul id="layer-list"></ul>
         </div>
+        <div id="attributes">
+          <h3>Attribute Table</h3>
+          <div id="attr-controls">
+            <button id="toggle-attr">Toggle Table</button>
+            <button id="export-btn">Export GeoJSON</button>
+            <button id="apply-attr-btn">Apply Edits</button>
+          </div>
+          <div id="attribute-table" style="display:none">
+            <table id="attr-table"><thead id="attr-thead"></thead><tbody id="attr-tbody"></tbody></table>
+          </div>
+        </div>
       </aside>
       <main id="map-container">
         <div id="map"></div>

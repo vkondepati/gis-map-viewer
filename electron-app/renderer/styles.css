@@ -9,3 +9,13 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 #map{height:100%}
 #layer-list{list-style:none;padding:0;margin:0}
 #layer-list li{background:#0f3b5a;padding:6px;margin-bottom:6px;border-radius:3px}
+
+#attributes{margin-top:12px;background:#072034;padding:8px;border-radius:4px;color:#fff}
+#attributes h3{margin:0 0 8px}
+#attr-controls{display:flex;gap:6px;margin-bottom:8px}
+#attribute-table{max-height:240px;overflow:auto;background:#fff;color:#000;padding:6px;border-radius:3px}
+#attr-table{width:100%;border-collapse:collapse}
+#attr-table th,#attr-table td{border:1px solid #ddd;padding:6px;font-size:12px}
+#attr-table th{background:#f0f0f0}
+#attr-table td[contenteditable]{background:#fffbe6}
+
