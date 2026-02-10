@@ -312,17 +312,26 @@ async function exportGeoJSON() {
 window.addEventListener('DOMContentLoaded', () => {
   createMap('EPSG:3857');
 
-  // Wire up collapsible sections
+  // Wire up collapsible sections and panels
   document.querySelectorAll('.toggle-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const sectionId = btn.dataset.section;
-      const content = document.getElementById(sectionId);
-      if (content) {
-        content.classList.toggle('collapsed');
-        btn.textContent = content.classList.contains('collapsed') ? '+' : '−';
+      const element = document.getElementById(sectionId);
+      if (element) {
+        element.classList.toggle('collapsed');
+        btn.textContent = element.classList.contains('collapsed') ? '+' : '−';
       }
     });
   });
+
+  // Expand attributes panel by default
+  const attrPanel = document.getElementById('attributes-panel');
+  if (attrPanel) {
+    attrPanel.classList.remove('collapsed');
+    const toggleBtn = attrPanel.querySelector('.toggle-btn');
+    if (toggleBtn) toggleBtn.textContent = '−';
+  }
 
   document.getElementById('open-btn').addEventListener('click', async () => {
     const res = await window.electronAPI.openGeoJSON();
@@ -388,10 +397,6 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
   // wire attribute table buttons
-  document.getElementById('toggle-attr').addEventListener('click', () => {
-    const el = document.getElementById('attribute-table');
-    el.style.display = el.style.display === 'none' ? 'block' : 'none';
-  });
   document.getElementById('apply-attr-btn').addEventListener('click', () => applyAttributeEdits());
   document.getElementById('export-btn').addEventListener('click', () => exportGeoJSON());
 });

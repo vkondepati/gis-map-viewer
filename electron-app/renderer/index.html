@@ -48,26 +48,24 @@
             <ul id="layer-list" class="toc-list"></ul>
           </div>
         </div>
-        <div class="section">
-          <div class="section-header">
-            <h3>Attributes</h3>
-            <button class="toggle-btn" data-section="attributes">−</button>
-          </div>
-        </div>
-      <div id="attributes" class="section-content">
-        <h3>Attribute Table</h3>
-          <div id="attr-controls">
-            <button id="toggle-attr">Toggle Table</button>
-            <button id="export-btn">Export GeoJSON</button>
-            <button id="apply-attr-btn">Apply Edits</button>
-          </div>
-          <div id="attribute-table" style="display:none">
-            <table id="attr-table"><thead id="attr-thead"></thead><tbody id="attr-tbody"></tbody></table>
-          </div>
-        </div>
       </aside>
       <main id="map-container">
         <div id="map"></div>
+        <div id="attributes-panel" class="bottom-panel collapsed">
+          <div class="panel-header">
+            <h3>Attributes</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button id="export-btn" style="padding:4px 8px;font-size:12px">Export</button>
+              <button id="apply-attr-btn" style="padding:4px 8px;font-size:12px">Apply Edits</button>
+              <button class="toggle-btn" data-section="attributes-panel">+</button>
+            </div>
+          </div>
+          <div id="attributes" class="panel-content">
+            <div id="attribute-table" style="display:none">
+              <table id="attr-table"><thead id="attr-thead"></thead><tbody id="attr-tbody"></tbody></table>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
 

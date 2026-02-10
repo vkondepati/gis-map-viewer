@@ -10,25 +10,31 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 #layer-list{list-style:none;padding:0;margin:0}
 #layer-list li{background:#0f3b5a;padding:6px;margin-bottom:6px;border-radius:3px}
 
-#attributes{margin-top:12px;background:#072034;padding:8px;border-radius:4px;color:#fff}
-#attributes h3{margin:0 0 8px}
-#attr-controls{display:flex;gap:6px;margin-bottom:8px}
-#attribute-table{max-height:240px;overflow:auto;background:#fff;color:#000;padding:6px;border-radius:3px}
-#attr-table{width:100%;border-collapse:collapse}
-#attr-table th,#attr-table td{border:1px solid #ddd;padding:6px;font-size:12px}
-#attr-table th{background:#f0f0f0}
+#attribute-table{width:100%;height:100%;overflow:auto;background:#fff;color:#000}
+#attr-table{width:100%;border-collapse:collapse;font-size:11px}
+#attr-table th,#attr-table td{border:1px solid #ddd;padding:4px;font-size:11px}
+#attr-table th{background:#f0f0f0;position:sticky;top:0;font-weight:bold}
 #attr-table td[contenteditable]{background:#fffbe6}
 
 /* Connections area */
 #connection-controls{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 
 /* Collapsible sections */
-.section{margin-top:12px;background:#0d2740;border-radius:4px;overflow:hidden}
+.section{margin-top:12px;background:#0d2740;border-radius:4px;overflow:hidden;max-height:1000px;transition:max-height 0.4s ease-in-out}
+.section.collapsed{max-height:0;overflow:hidden}
 .section-header{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#0a1f2e;cursor:pointer}
 .section-header h3{margin:0;color:#fff;font-size:14px}
-.toggle-btn{background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 4px}
-.section-content{max-height:500px;overflow:hidden;transition:max-height 0.3s;padding:8px}
-.section-content.collapsed{max-height:0;padding:0}
+.toggle-btn{background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 4px;min-width:24px}
+.section-content{padding:8px;overflow:hidden}
+
+/* Bottom panel */
+#map-container{position:relative;display:flex;flex-direction:column;flex:1}
+#map{flex:1;z-index:1}
+.bottom-panel{position:absolute;bottom:0;left:0;right:0;background:#0d2740;border-top:2px solid #0a1f2e;z-index:10;max-height:300px;transition:max-height 0.4s ease-in-out;display:flex;flex-direction:column}
+.bottom-panel.collapsed{max-height:45px}
+.panel-header{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#0a1f2e;color:#fff;border-bottom:1px solid #072034;flex-shrink:0}
+.panel-header h3{margin:0;font-size:14px;color:#fff}
+.panel-content{flex:1;overflow:auto;padding:8px}
 
 /* TOC / layers */
 .toc-list{list-style:none;padding:0;margin:0}
