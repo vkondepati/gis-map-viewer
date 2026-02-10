@@ -22,6 +22,14 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 /* Connections area */
 #connection-controls{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 
+/* Collapsible sections */
+.section{margin-top:12px;background:#0d2740;border-radius:4px;overflow:hidden}
+.section-header{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#0a1f2e;cursor:pointer}
+.section-header h3{margin:0;color:#fff;font-size:14px}
+.toggle-btn{background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 4px}
+.section-content{max-height:500px;overflow:hidden;transition:max-height 0.3s;padding:8px}
+.section-content.collapsed{max-height:0;padding:0}
+
 /* TOC / layers */
 .toc-list{list-style:none;padding:0;margin:0}
 .toc-list li{display:flex;align-items:center;gap:8px;background:#08314f;padding:6px;margin-bottom:6px;border-radius:3px;color:#fff}

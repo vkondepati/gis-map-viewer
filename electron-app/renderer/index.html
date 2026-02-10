@@ -11,32 +11,51 @@
     <div id="app">
       <aside id="sidebar">
         <h2>NexaMap</h2>
-        <div class="controls">
-          <label for="connection-select">Connections:</label>
-          <select id="connection-select">
-            <option value="file">File (GeoJSON)</option>
-            <option value="duckdb">DuckDB (local)</option>
-            <option value="snowflake">Snowflake</option>
-            <option value="databricks">Databricks</option>
-            <option value="iceberg">Apache Iceberg</option>
-          </select>
-          <div id="connection-controls">
-            <button id="open-btn">Browse File</button>
-            <input id="conn-string" placeholder="connection string / params" style="width:100%" />
-            <button id="connect-btn">Connect</button>
+        <div class="section">
+          <div class="section-header">
+            <h3>Connections</h3>
+            <button class="toggle-btn" data-section="connections">−</button>
           </div>
-          <label for="crs-select">CRS:</label>
-          <select id="crs-select">
-            <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
-            <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
-          </select>
+          <div id="connections" class="section-content">
+            <div class="controls">
+              <label for="connection-select">Connections:</label>
+              <select id="connection-select">
+                <option value="file">File (GeoJSON)</option>
+                <option value="duckdb">DuckDB (local)</option>
+                <option value="snowflake">Snowflake</option>
+                <option value="databricks">Databricks</option>
+                <option value="iceberg">Apache Iceberg</option>
+              </select>
+              <div id="connection-controls">
+                <button id="open-btn">Browse File</button>
+                <input id="conn-string" placeholder="connection string / params" style="width:100%" />
+                <button id="connect-btn">Connect</button>
+              </div>
+              <label for="crs-select">CRS:</label>
+              <select id="crs-select">
+                <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
+                <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <div id="layers">
+        <div class="section">
+          <div class="section-header">
             <h3>Table of Contents</h3>
+            <button class="toggle-btn" data-section="layers">−</button>
+          </div>
+          <div id="layers" class="section-content">
             <ul id="layer-list" class="toc-list"></ul>
           </div>
-        <div id="attributes">
-          <h3>Attribute Table</h3>
+        </div>
+        <div class="section">
+          <div class="section-header">
+            <h3>Attributes</h3>
+            <button class="toggle-btn" data-section="attributes">−</button>
+          </div>
+        </div>
+      <div id="attributes" class="section-content">
+        <h3>Attribute Table</h3>
           <div id="attr-controls">
             <button id="toggle-attr">Toggle Table</button>
             <button id="export-btn">Export GeoJSON</button>

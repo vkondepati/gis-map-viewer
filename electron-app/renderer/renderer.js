@@ -312,6 +312,18 @@ async function exportGeoJSON() {
 window.addEventListener('DOMContentLoaded', () => {
   createMap('EPSG:3857');
 
+  // Wire up collapsible sections
+  document.querySelectorAll('.toggle-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const sectionId = btn.dataset.section;
+      const content = document.getElementById(sectionId);
+      if (content) {
+        content.classList.toggle('collapsed');
+        btn.textContent = content.classList.contains('collapsed') ? '+' : '−';
+      }
+    });
+  });
+
   document.getElementById('open-btn').addEventListener('click', async () => {
     const res = await window.electronAPI.openGeoJSON();
     if (res && !res.canceled) {
