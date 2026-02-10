@@ -2,6 +2,8 @@
 let map, baseLayer, currentGeoJsonLayer;
 let lastGeoJSONLoaded = null;
 let lastGeoJSONSourceCRS = null;
+let layers = []; // {id, name, layer, visible}
+let layerIdSeq = 1;
 
 // Helper: normalize CRS string like 'EPSG:4326' or 'urn:ogc:def:crs:EPSG::4326'
 function normalizeCRSName(name) {
@@ -79,8 +81,7 @@ function createMap(crs) {
 }
 
 function addGeoJSONLayer(geojson, name) {
-  if (currentGeoJsonLayer) map.removeLayer(currentGeoJsonLayer);
-  currentGeoJsonLayer = L.geoJSON(geojson, {
+  const leafletLayer = L.geoJSON(geojson, {
     style: { color: '#ff7800', weight: 2 },
     onEachFeature: (feature, layer) => {
       let info = '<pre>' + JSON.stringify(feature.properties || {}, null, 2) + '</pre>';
@@ -90,19 +91,45 @@ function addGeoJSONLayer(geojson, name) {
 
   // Fit to layer bounds if available
   try {
-    const bounds = currentGeoJsonLayer.getBounds();
+    const bounds = leafletLayer.getBounds();
     if (bounds.isValid && bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
   } catch (e) {
     // ignore
   }
 
-  // add to layer list
+  const id = 'layer-' + layerIdSeq++;
+  layers.push({ id, name: name || 'Layer ' + id, layer: leafletLayer, visible: true, geojson });
+
+  // add to layer list (TOC) with checkbox
   const li = document.createElement('li');
-  li.textContent = name || 'GeoJSON layer';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = true;
+  cb.dataset.layerId = id;
+  cb.addEventListener('change', (ev) => {
+    toggleLayerVisibility(ev.target.dataset.layerId, ev.target.checked);
+  });
+  const lbl = document.createElement('span');
+  lbl.textContent = name || id;
+  li.appendChild(cb);
+  li.appendChild(lbl);
   document.getElementById('layer-list').appendChild(li);
 
-  // populate attribute table for the loaded geojson
+  // populate attribute table for the last loaded geojson
+  lastGeoJSONLoaded = geojson;
   renderAttributeTable(geojson);
+}
+
+function toggleLayerVisibility(id, visible) {
+  const entry = layers.find((l) => l.id === id);
+  if (!entry) return;
+  if (visible) {
+    entry.layer.addTo(map);
+    entry.visible = true;
+  } else {
+    map.removeLayer(entry.layer);
+    entry.visible = false;
+  }
 }
 
 function renderAttributeTable(geojson) {
@@ -217,6 +244,34 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // connection controls: connect button will either open file (file mode) or attempt warehouse connect (stub)
+  document.getElementById('connect-btn').addEventListener('click', async () => {
+    const mode = document.getElementById('connection-select').value;
+    if (mode === 'file') {
+      document.getElementById('open-btn').click();
+      return;
+    }
+    const conn = document.getElementById('conn-string').value || '(no params)';
+    await connectToWarehouse(mode, conn);
+  });
+
+  document.getElementById('connection-select').addEventListener('change', (ev) => {
+    const mode = ev.target.value;
+    // show/hide open button and placeholder
+    if (mode === 'file') {
+      document.getElementById('open-btn').style.display = 'inline-block';
+      document.getElementById('conn-string').style.display = 'none';
+      document.getElementById('connect-btn').textContent = 'Open';
+    } else {
+      document.getElementById('open-btn').style.display = 'none';
+      document.getElementById('conn-string').style.display = 'inline-block';
+      document.getElementById('connect-btn').textContent = 'Connect';
+    }
+  });
+
+  // initialize connections UI
+  document.getElementById('connection-select').dispatchEvent(new Event('change'));
+
   document.getElementById('crs-select').addEventListener('change', (ev) => {
     const selected = ev.target.value;
     // Recreate the map (Leaflet uses EPSG:3857) but allow reprojection of loaded GeoJSON
@@ -235,3 +290,18 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apply-attr-btn').addEventListener('click', () => applyAttributeEdits());
   document.getElementById('export-btn').addEventListener('click', () => exportGeoJSON());
 });
+
+async function connectToWarehouse(mode, connStr) {
+  // Stub connector: in a real app this would open a connection and run a query.
+  // For now simulate by adding a small sample GeoJSON layer with name indicating the source.
+  const sample = {
+    type: 'FeatureCollection',
+    features: [
+      { type: 'Feature', properties: { source: mode, conn: connStr, id: 1 }, geometry: { type: 'Point', coordinates: [0, 0] } },
+      { type: 'Feature', properties: { source: mode, conn: connStr, id: 2 }, geometry: { type: 'Point', coordinates: [10, 10] } },
+    ],
+  };
+  const transformed = reprojectGeoJSON(sample, 'EPSG:4326', 'EPSG:3857');
+  addGeoJSONLayer(transformed, `${mode} (${connStr})`);
+  alert(`Connected to ${mode} (simulated) — sample layer added`);
+}

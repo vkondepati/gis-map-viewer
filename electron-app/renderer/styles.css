@@ -19,3 +19,12 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 #attr-table th{background:#f0f0f0}
 #attr-table td[contenteditable]{background:#fffbe6}
 
+/* Connections area */
+#connection-controls{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+
+/* TOC / layers */
+.toc-list{list-style:none;padding:0;margin:0}
+.toc-list li{display:flex;align-items:center;gap:8px;background:#08314f;padding:6px;margin-bottom:6px;border-radius:3px;color:#fff}
+.toc-list input[type="checkbox"]{transform:scale(1.1)}
+
+

@@ -12,7 +12,19 @@
       <aside id="sidebar">
         <h2>NexaMap</h2>
         <div class="controls">
-          <button id="open-btn">Open GeoJSON</button>
+          <label for="connection-select">Connections:</label>
+          <select id="connection-select">
+            <option value="file">File (GeoJSON)</option>
+            <option value="duckdb">DuckDB (local)</option>
+            <option value="snowflake">Snowflake</option>
+            <option value="databricks">Databricks</option>
+            <option value="iceberg">Apache Iceberg</option>
+          </select>
+          <div id="connection-controls">
+            <button id="open-btn">Browse File</button>
+            <input id="conn-string" placeholder="connection string / params" style="width:100%" />
+            <button id="connect-btn">Connect</button>
+          </div>
           <label for="crs-select">CRS:</label>
           <select id="crs-select">
             <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
@@ -20,9 +32,9 @@
           </select>
         </div>
         <div id="layers">
-          <h3>Layers</h3>
-          <ul id="layer-list"></ul>
-        </div>
+            <h3>Table of Contents</h3>
+            <ul id="layer-list" class="toc-list"></ul>
+          </div>
         <div id="attributes">
           <h3>Attribute Table</h3>
           <div id="attr-controls">
