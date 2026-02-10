@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>NexaMap Desktop (Electron)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <h2>NexaMap</h2>
+        <div class="controls">
+          <button id="open-btn">Open GeoJSON</button>
+          <label for="crs-select">CRS:</label>
+          <select id="crs-select">
+            <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
+            <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
+          </select>
+        </div>
+        <div id="layers">
+          <h3>Layers</h3>
+          <ul id="layer-list"></ul>
+        </div>
+      </aside>
+      <main id="map-container">
+        <div id="map"></div>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>

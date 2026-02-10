@@ -1,0 +1,11 @@
+html,body,#app,#map{height:100%;}
+body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
+#app{display:flex;height:100vh}
+#sidebar{width:300px;background:#0d2740;color:#fff;padding:12px;box-sizing:border-box}
+#sidebar h2{margin:0 0 12px}
+.controls{display:flex;flex-direction:column;gap:8px}
+#layers{margin-top:16px;background:#072034;padding:8px;border-radius:4px}
+#map-container{flex:1}
+#map{height:100%}
+#layer-list{list-style:none;padding:0;margin:0}
+#layer-list li{background:#0f3b5a;padding:6px;margin-bottom:6px;border-radius:3px}

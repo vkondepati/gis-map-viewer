@@ -1,0 +1,15 @@
+{
+  "name": "nexamap-electron",
+  "version": "0.1.0",
+  "description": "Minimal NexaMap Electron + Leaflet example app (GeoJSON loader, CRS selection)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "keywords": ["nexamap","gis","electron","leaflet"],
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0"
+  }
+}
