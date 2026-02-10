@@ -1,5 +1,67 @@
 // Renderer: minimal map app that loads GeoJSON via preload API and displays in Leaflet
 let map, baseLayer, currentGeoJsonLayer;
+let lastGeoJSONLoaded = null;
+let lastGeoJSONSourceCRS = null;
+
+// Helper: normalize CRS string like 'EPSG:4326' or 'urn:ogc:def:crs:EPSG::4326'
+function normalizeCRSName(name) {
+  if (!name) return null;
+  const m = name.match(/EPSG(?::|::)?(\d+)|EPSG:(\d+)/i);
+  if (m) return 'EPSG:' + (m[1] || m[2]);
+  // already in EPSG:#### form?
+  if (/^EPSG:\d+/i.test(name)) return name.toUpperCase();
+  return name;
+}
+
+// Reproject a GeoJSON object from `fromCRS` to `toCRS` (default map CRS: EPSG:3857)
+function reprojectGeoJSON(geojson, fromCRS, toCRS = 'EPSG:3857') {
+  if (!fromCRS || fromCRS === toCRS) return geojson;
+  // ensure proj4 is available
+  if (typeof proj4 !== 'function') return geojson;
+
+  function transformCoords(coords) {
+    if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+      // proj4 expects [lon, lat]
+      const out = proj4(fromCRS, toCRS, coords);
+      return out;
+    }
+    return coords.map(transformCoords);
+  }
+
+  function transformGeometry(geom) {
+    if (!geom) return geom;
+    const g = Object.assign({}, geom);
+    if (g.type === 'Point' || g.type === 'MultiPoint' || g.type === 'LineString' || g.type === 'MultiLineString' || g.type === 'Polygon' || g.type === 'MultiPolygon') {
+      g.coordinates = transformCoords(g.coordinates);
+      return g;
+    }
+    if (g.type === 'GeometryCollection') {
+      g.geometries = g.geometries.map(transformGeometry);
+      return g;
+    }
+    return g;
+  }
+
+  // Deep clone to avoid mutating original
+  const clone = JSON.parse(JSON.stringify(geojson));
+
+  if (clone.type === 'FeatureCollection') {
+    clone.features = clone.features.map((f) => {
+      const nf = Object.assign({}, f);
+      nf.geometry = transformGeometry(f.geometry);
+      return nf;
+    });
+    return clone;
+  }
+
+  if (clone.type === 'Feature') {
+    clone.geometry = transformGeometry(clone.geometry);
+    return clone;
+  }
+
+  // raw geometry
+  return transformGeometry(clone);
+}
 
 function createMap(crs) {
   // Destroy existing map if any
@@ -48,7 +110,20 @@ window.addEventListener('DOMContentLoaded', () => {
     if (res && !res.canceled) {
       try {
         const parsed = JSON.parse(res.content);
-        addGeoJSONLayer(parsed, res.path.split(/[\\/]/).pop());
+
+        // Determine source CRS: prefer GeoJSON `crs` member if present, else use user-selected CRS
+        let sourceCrs = null;
+        if (parsed.crs && parsed.crs.properties && parsed.crs.properties.name) {
+          sourceCrs = normalizeCRSName(parsed.crs.properties.name);
+        }
+        if (!sourceCrs) {
+          sourceCrs = document.getElementById('crs-select').value || 'EPSG:4326';
+        }
+        lastGeoJSONLoaded = parsed;
+        lastGeoJSONSourceCRS = sourceCrs;
+
+        const transformed = reprojectGeoJSON(parsed, sourceCrs, 'EPSG:3857');
+        addGeoJSONLayer(transformed, res.path.split(/[\\/]/).pop());
       } catch (err) {
         alert('Failed to parse GeoJSON: ' + err.message);
       }
@@ -56,8 +131,13 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('crs-select').addEventListener('change', (ev) => {
-    // For now just recreate the map (advanced reprojection would require proj4/proj4leaflet)
-    createMap(ev.target.value);
-    if (currentGeoJsonLayer) currentGeoJsonLayer.addTo(map);
+    const selected = ev.target.value;
+    // Recreate the map (Leaflet uses EPSG:3857) but allow reprojection of loaded GeoJSON
+    createMap('EPSG:3857');
+    if (lastGeoJSONLoaded) {
+      // Reproject from user-selected source CRS to map CRS
+      const transformed = reprojectGeoJSON(lastGeoJSONLoaded, selected, 'EPSG:3857');
+      addGeoJSONLayer(transformed, 'reprojected');
+    }
   });
 });
