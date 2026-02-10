@@ -81,8 +81,23 @@ function createMap(crs) {
 }
 
 function addGeoJSONLayer(geojson, name) {
+  // create layer with pointToLayer to produce circleMarkers so symbology can be updated via setStyle
   const leafletLayer = L.geoJSON(geojson, {
-    style: { color: '#ff7800', weight: 2 },
+    pointToLayer: (feature, latlng) => {
+      // use per-layer symbology if present, fallback to defaults
+      const sym = getLayerSymDefaults() || { radius: 6, color: '#ff7800', fillColor: '#ff7800', weight: 2, fillOpacity: 0.7 };
+      return L.circleMarker(latlng, {
+        radius: sym.radius,
+        color: sym.color,
+        fillColor: sym.fillColor,
+        weight: sym.weight,
+        fillOpacity: sym.fillOpacity,
+      });
+    },
+    style: (feature) => {
+      const sym = getLayerSymDefaults() || { color: '#ff7800', weight: 2, fillOpacity: 0.7 };
+      return { color: sym.color, weight: sym.weight, fillOpacity: sym.fillOpacity };
+    },
     onEachFeature: (feature, layer) => {
       let info = '<pre>' + JSON.stringify(feature.properties || {}, null, 2) + '</pre>';
       layer.bindPopup(info);
@@ -109,15 +124,93 @@ function addGeoJSONLayer(geojson, name) {
   cb.addEventListener('change', (ev) => {
     toggleLayerVisibility(ev.target.dataset.layerId, ev.target.checked);
   });
+  // symbol swatch
+  const sw = document.createElement('div');
+  sw.className = 'sym-swatch';
+  sw.dataset.layerId = id;
+  // default symbology (points use radius,color)
+  const defaultSym = { color: '#ff7800', fillColor: '#ff7800', radius: 6, weight: 2, fillOpacity: 0.7 };
+  entrySetSymDefaults(id, defaultSym);
+  applySymToSwatch(sw, defaultSym);
+  sw.addEventListener('click', (e) => showSymEditor(e.target.dataset.layerId, li));
+
   const lbl = document.createElement('span');
   lbl.textContent = name || id;
   li.appendChild(cb);
+  li.appendChild(sw);
   li.appendChild(lbl);
   document.getElementById('layer-list').appendChild(li);
 
   // populate attribute table for the last loaded geojson
   lastGeoJSONLoaded = geojson;
   renderAttributeTable(geojson);
+}
+
+// symbology store per-layer
+const layerSym = {};
+function entrySetSymDefaults(id, sym) {
+  layerSym[id] = Object.assign({}, sym);
+}
+function getLayerSymDefaults(id) {
+  if (!id) return null;
+  return layerSym[id] || null;
+}
+function applySymToSwatch(swatchEl, sym) {
+  if (!swatchEl) return;
+  swatchEl.style.background = sym.fillColor || sym.color || '#888';
+}
+
+function applySymbologyToLayer(id) {
+  const entry = layers.find((l) => l.id === id);
+  if (!entry) return;
+  const sym = layerSym[id];
+  if (!sym) return;
+  // iterate over each child layer
+  entry.layer.eachLayer((ly) => {
+    // path layers (LineString/Polygon) support setStyle
+    if (typeof ly.setStyle === 'function') {
+      ly.setStyle({ color: sym.color, weight: sym.weight, fillColor: sym.fillColor, fillOpacity: sym.fillOpacity });
+    }
+    // circleMarker supports setRadius via setStyle in Leaflet v1.x
+    if (ly.setRadius) {
+      try { ly.setStyle({ radius: sym.radius, color: sym.color, fillColor: sym.fillColor, weight: sym.weight, fillOpacity: sym.fillOpacity }); } catch (e) {}
+    }
+  });
+}
+
+function showSymEditor(id, liElement) {
+  // remove existing editor if present
+  const existing = document.getElementById('sym-editor-' + id);
+  if (existing) { existing.remove(); return; }
+  const sym = layerSym[id] || { color: '#ff7800', fillColor: '#ff7800', radius: 6, weight: 2, fillOpacity: 0.7 };
+  const editor = document.createElement('div');
+  editor.id = 'sym-editor-' + id;
+  editor.className = 'sym-editor';
+  editor.innerHTML = `
+    <label>Color: <input type="color" id="sym-color-${id}" value="${sym.color}" /></label>
+    <label>Fill Color: <input type="color" id="sym-fill-${id}" value="${sym.fillColor||sym.color}" /></label>
+    <label>Radius: <input type="number" id="sym-radius-${id}" value="${sym.radius}" min="1" /></label>
+    <label>Weight: <input type="number" id="sym-weight-${id}" value="${sym.weight}" min="0"/></label>
+    <label>Fill opacity: <input type="range" id="sym-fillop-${id}" value="${sym.fillOpacity}" min="0" max="1" step="0.05"/></label>
+    <div style="display:flex;gap:8px;margin-top:8px"><button id="sym-apply-${id}">Apply</button><button id="sym-close-${id}">Close</button></div>
+  `;
+  liElement.appendChild(editor);
+  document.getElementById(`sym-apply-${id}`).addEventListener('click', () => {
+    const newSym = {
+      color: document.getElementById(`sym-color-${id}`).value,
+      fillColor: document.getElementById(`sym-fill-${id}`).value,
+      radius: Number(document.getElementById(`sym-radius-${id}`).value),
+      weight: Number(document.getElementById(`sym-weight-${id}`).value),
+      fillOpacity: Number(document.getElementById(`sym-fillop-${id}`).value),
+    };
+    layerSym[id] = newSym;
+    // update swatch
+    const sw = liElement.querySelector('.sym-swatch');
+    applySymToSwatch(sw, newSym);
+    // apply to leaflet layer
+    applySymbologyToLayer(id);
+  });
+  document.getElementById(`sym-close-${id}`).addEventListener('click', () => editor.remove());
 }
 
 function toggleLayerVisibility(id, visible) {
