@@ -1,0 +1,2 @@
+# # Extracted from USAGE.md (fence #5, lang='right-click layer → remove layer')
+

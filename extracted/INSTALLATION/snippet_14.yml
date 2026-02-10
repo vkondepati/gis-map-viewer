@@ -1,0 +1,12 @@
+# # Extracted from INSTALLATION.md (fence #14, lang='yaml')
+# docker-compose.yml
+version: "3.8"
+services:
+  gis-viewer:
+    build: .
+    environment:
+      - DISPLAY=host.docker.internal:0
+    volumes:
+      - ~/maps:/data
+    ports:
+      - "5000:5000" # If using web interface

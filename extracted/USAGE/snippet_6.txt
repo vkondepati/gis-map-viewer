@@ -1,0 +1,2 @@
+# # Extracted from USAGE.md (fence #6, lang='drag layer up/down in layers panel')
+

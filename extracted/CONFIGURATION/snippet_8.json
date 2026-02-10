@@ -1,0 +1,27 @@
+# # Extracted from CONFIGURATION.md (fence #8, lang='json')
+{
+  "version": "1.0.0",
+  "theme": "light",
+  "language": "en",
+  "units": "metric",
+  "defaultCRS": "EPSG:4326",
+  "recentProjects": ["/path/to/project1.gmp", "/path/to/project2.gmp"],
+  "windowGeometry": {
+    "width": 1280,
+    "height": 720,
+    "x": 100,
+    "y": 100
+  },
+  "performance": {
+    "hardwareAcceleration": true,
+    "tileCache": 524288000,
+    "maxMemoryUsage": 2147483648,
+    "vectorSimplification": "medium"
+  },
+  "display": {
+    "backgroundColor": "#E8E8E8",
+    "showScaleBar": true,
+    "showCoordinates": true,
+    "showAttribution": true
+  }
+}

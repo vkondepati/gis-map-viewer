@@ -1,0 +1,9 @@
+# # Extracted from CONFIGURATION.md (fence #2, lang='name: my snowflake account')
+Type: Snowflake
+Account: accountname (without .snowflakecomputing.com)
+Warehouse: COMPUTE_WH
+Database: GIS_DATA
+Schema: PUBLIC
+Username: [username]
+Password: [password]
+Role: SYSADMIN

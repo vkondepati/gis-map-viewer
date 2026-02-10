@@ -1,0 +1,6 @@
+# # Extracted from CONFIGURATION.md (fence #4, lang='type: iceberg')
+Catalog Type: REST (or SQL, Hive, Nessie)
+URI: http://localhost:8181
+Warehouse: s3://mybucket/warehouse
+S3 Access Key: [key]
+S3 Secret Key: [secret]

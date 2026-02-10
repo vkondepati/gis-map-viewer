@@ -1,0 +1,2 @@
+# # Extracted from TROUBLESHOOTING.md (fence #23, lang='http://server.com/wms?service=wms&version=1.3.0&request=getcapabilities')
+

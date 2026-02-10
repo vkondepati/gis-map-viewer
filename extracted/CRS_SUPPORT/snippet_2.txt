@@ -1,0 +1,9 @@
+# # Extracted from CRS_SUPPORT.md (fence #2, lang='projcs["custom projection",')
+     GEOGCS["WGS 84",...],
+     PROJECTION["Transverse_Mercator"],
+     PARAMETER["false_easting",500000],
+     PARAMETER["false_northing",0],
+     PARAMETER["scale_factor",0.9996],
+     PARAMETER["central_meridian",3],
+     PARAMETER["latitude_of_origin",0],
+     UNIT["metre",1]]

@@ -1,0 +1,20 @@
+# # Extracted from CONFIGURATION.md (fence #9, lang='json')
+{
+  "connections": [
+    {
+      "name": "Local DuckDB",
+      "type": "duckdb",
+      "filePath": "/Users/user/data.duckdb",
+      "readOnly": false
+    },
+    {
+      "name": "Production Snowflake",
+      "type": "snowflake",
+      "account": "accountname",
+      "warehouse": "COMPUTE_WH",
+      "database": "GIS_DATA",
+      "schema": "PUBLIC",
+      "username": "user@example.com"
+    }
+  ]
+}

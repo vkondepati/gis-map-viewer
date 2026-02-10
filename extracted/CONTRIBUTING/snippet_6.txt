@@ -1,0 +1,12 @@
+# # Extracted from CONTRIBUTING.md (fence #6, lang='feat(spatial): add buffer operation for polygons')
+
+Implements ST_Buffer using GEOS library.
+Allows configurable buffer distance and join styles.
+
+Closes #123
+
+fix(ui): correct zoom control button alignment
+
+fix(crs): handle missing .prj file gracefully
+
+docs(api): update DuckDB connector documentation

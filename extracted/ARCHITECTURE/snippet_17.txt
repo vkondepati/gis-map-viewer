@@ -1,0 +1,9 @@
+# # Extracted from ARCHITECTURE.md (fence #17, lang='installation')
+├─ Windows installer (.exe)
+├─ macOS DMG
+└─ Linux AppImage
+
+Runtime
+├─ Electron + Node.js (or Qt + C++)
+├─ GDAL/GEOS/Proj libraries
+└─ Local data/cache directory

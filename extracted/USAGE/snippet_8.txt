@@ -1,0 +1,2 @@
+# # Extracted from USAGE.md (fence #8, lang='right-click layer → properties → symbology')
+

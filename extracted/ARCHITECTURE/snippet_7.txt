@@ -1,0 +1,17 @@
+# # Extracted from ARCHITECTURE.md (fence #7, lang='connection request')
+        ↓
+Connector.connect() [DuckDB/SF/etc]
+        ↓
+Build SQL Query
+        ↓
+Bind Spatial Parameters
+        ↓
+Execute Query on Server
+        ↓
+Stream Results
+        ↓
+Convert to GeoJSON
+        ↓
+Create Layer
+        ↓
+Render on Map

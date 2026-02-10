@@ -1,0 +1,17 @@
+# # Extracted from SUPPORTED_FORMATS.md (fence #2, lang='json')
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-74.0, 40.7]
+      },
+      "properties": {
+        "name": "New York",
+        "population": 8000000
+      }
+    }
+  ]
+}

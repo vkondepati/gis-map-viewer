@@ -1,0 +1,2 @@
+# # Extracted from TROUBLESHOOTING.md (fence #29, lang='~/.config/gismapviewer/logs/app.log')
+~/.config/GISMapViewer/logs/error.log

@@ -1,0 +1,5 @@
+# # Extracted from CRS_SUPPORT.md (fence #1, lang='new york:      40.7128°n, 74.0060°w (or 40.7128, -74.0060)')
+London:        51.5074°N, 0.1278°W (or 51.5074, -0.1278)
+Sydney:        33.8688°S, 151.2093°E (or -33.8688, 151.2093)
+Equator/Prime: 0°, 0°
+Equator/IDL:   0°, ±180°

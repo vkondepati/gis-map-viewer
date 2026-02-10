@@ -1,0 +1,15 @@
+# # Extracted from ARCHITECTURE.md (fence #3, lang='user action (ui)')
+      ↓
+   Dispatcher/Controller
+      ↓
+   Tool Manager
+      ↓
+   Map Component ←→ Analysis Component
+      ↓                    ↓
+   Layer Manager        GEOS/GDAL
+      ↓                    ↓
+   Data Loader        Results
+      ↓
+   Rendering Engine
+      ↓
+   Map Display (UI)

@@ -1,0 +1,15 @@
+# # Extracted from ARCHITECTURE.md (fence #6, lang='input: feature(s) + operation')
+        ↓
+Validate Geometry (GEOS)
+        ↓
+Prepare for Analysis
+        ↓
+Execute Operation (GEOS/GDAL)
+        ↓
+Transform Result CRS if needed
+        ↓
+Create Result Feature
+        ↓
+Add to Map (new layer)
+        ↓
+User Sees Result

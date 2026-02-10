@@ -1,0 +1,2 @@
+# # Extracted from SUPPORTED_FORMATS.md (fence #1, lang='file → open data layer → select .shp file')
+

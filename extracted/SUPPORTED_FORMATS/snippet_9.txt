@@ -1,0 +1,2 @@
+# # Extracted from SUPPORTED_FORMATS.md (fence #9, lang='https://tile.openstreetmap.org/{z}/{x}/{y}.png')
+

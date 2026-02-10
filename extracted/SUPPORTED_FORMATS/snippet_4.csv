@@ -1,0 +1,5 @@
+# # Extracted from SUPPORTED_FORMATS.md (fence #4, lang='csv')
+name,latitude,longitude,population
+"New York",40.7128,-74.0060,8000000
+"London",51.5074,-0.1278,9000000
+"Tokyo",35.6762,139.6503,37400068

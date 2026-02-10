@@ -1,0 +1,2 @@
+# # Extracted from SUPPORTED_FORMATS.md (fence #6, lang='file → open data layer → select .kml or .kmz file')
+

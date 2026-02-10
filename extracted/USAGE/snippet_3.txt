@@ -1,0 +1,9 @@
+# # Extracted from USAGE.md (fence #3, lang='file → add data warehouse layer')
+↓
+Select source (DuckDB, Snowflake, Databricks, Iceberg)
+↓
+Enter connection details
+↓
+Write or select SQL query
+↓
+Click Load

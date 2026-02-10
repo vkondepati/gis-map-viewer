@@ -1,0 +1,4 @@
+# # Extracted from CONFIGURATION.md (fence #6, lang='~/library/application support/gismapviewer/config.json')
+~/Library/Application Support/GISMapViewer/connections.json
+~/Library/Application Support/GISMapViewer/themes.json
+~/Library/Application Support/GISMapViewer/plugins/

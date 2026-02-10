@@ -1,0 +1,14 @@
+# # Extracted from ARCHITECTURE.md (fence #8, lang='model (state)')
+   ├─ Map state
+   ├─ Layer data
+   └─ Feature properties
+         ↕
+   Controller (Logic)
+   ├─ Handle user input
+   ├─ Update model
+   └─ Trigger view updates
+         ↕
+    View (UI)
+    ├─ Display model state
+    ├─ Capture user input
+    └─ Request controller actions

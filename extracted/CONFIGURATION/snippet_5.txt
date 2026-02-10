@@ -1,0 +1,4 @@
+# # Extracted from CONFIGURATION.md (fence #5, lang='%appdata%\gismapviewer\config.json       main configuration')
+%APPDATA%\GISMapViewer\connections.json  Database connections
+%APPDATA%\GISMapViewer\themes.json       Theme customizations
+%APPDATA%\GISMapViewer\plugins\          Installed plugins

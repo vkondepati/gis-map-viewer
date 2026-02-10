@@ -1,0 +1,7 @@
+# # Extracted from CONFIGURATION.md (fence #3, lang='name: my databricks workspace')
+Type: Databricks
+Workspace URL: https://yourworkspace.cloud.databricks.com
+Token: [personal access token]
+Cluster: all-purpose-cluster-1
+Catalog: main
+Schema: default

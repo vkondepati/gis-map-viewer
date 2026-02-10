@@ -1,0 +1,5 @@
+# # Extracted from CONFIGURATION.md (fence #1, lang='name: my duckdb database')
+Type: DuckDB
+File Path: /path/to/database.duckdb
+Read-Only: No
+Max Pool Size: 10

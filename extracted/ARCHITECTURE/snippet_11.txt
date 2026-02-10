@@ -1,0 +1,5 @@
+# # Extracted from ARCHITECTURE.md (fence #11, lang='analysis.buffer(feature, {')
+  algorithm: 'simple'     // Fast, simple buffer
+  algorithm: 'accurate'   // Slow, precise buffer
+  algorithm: 'mitigation' // For error recovery
+})

@@ -1,0 +1,17 @@
+# # Extracted from ARCHITECTURE.md (fence #4, lang='file/service selection')
+        ↓
+DataLoader.load()
+        ↓
+Format Detection (GDAL)
+        ↓
+CRS Detection
+        ↓
+Data Parsing
+        ↓
+Layer Creation
+        ↓
+Style Application (default)
+        ↓
+Rendering (Canvas)
+        ↓
+User Sees Map

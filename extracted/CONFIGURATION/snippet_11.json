@@ -1,0 +1,30 @@
+# # Extracted from CONFIGURATION.md (fence #11, lang='json')
+{
+  "name": "My GIS Project",
+  "version": "1.0",
+  "crs": "EPSG:4326",
+  "extent": {
+    "north": 40.0,
+    "south": 39.0,
+    "east": -73.0,
+    "west": -74.0
+  },
+  "layers": [
+    {
+      "name": "Base Map",
+      "source": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      "type": "wmts",
+      "opacity": 1.0,
+      "visible": true
+    },
+    {
+      "name": "Survey Data",
+      "source": "/data/survey.shp",
+      "type": "shapefile",
+      "style": {
+        "color": "#FF0000",
+        "size": 5
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+# # Extracted from CONFIGURATION.md (fence #10, lang='json')
+{
+  "themes": [
+    {
+      "name": "Custom Dark",
+      "colors": {
+        "background": "#1E1E1E",
+        "foreground": "#FFFFFF",
+        "primary": "#0078D4",
+        "secondary": "#50E6FF"
+      },
+      "fonts": {
+        "ui": "Segoe UI",
+        "monospace": "Courier New"
+      }
+    }
+  ]
+}

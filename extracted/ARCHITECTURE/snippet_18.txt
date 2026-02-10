@@ -1,0 +1,9 @@
+# # Extracted from ARCHITECTURE.md (fence #18, lang='dockerfile')
+├─ Base OS (Ubuntu/Alpine)
+├─ Install GDAL/GEOS/Proj
+├─ Copy application
+├─ Install dependencies
+└─ Set entry point
+
+Run
+└─ Docker container → Desktop output

@@ -1,0 +1,16 @@
+# # Extracted from ARCHITECTURE.md (fence #1, lang='┌─────────────────────────────────────────────────────────┐')
+│                   User Interface Layer                   │
+│  (Electron/Qt/Web UI - Desktop Application Frontend)    │
+├─────────────────────────────────────────────────────────┤
+│                  Application Logic Layer                 │
+│  (Map Engine, Tools, Project Management, Settings)      │
+├─────────────────────────────────────────────────────────┤
+│              Data Access & Integration Layer             │
+│  (File Loaders, Web Services, Database Connectors)      │
+├─────────────────────────────────────────────────────────┤
+│           Geospatial Processing Libraries                │
+│  (GDAL/OGR, GEOS, PROJ, Spatial Analysis Engine)        │
+├─────────────────────────────────────────────────────────┤
+│                    Data Sources                          │
+│  (Files, Web Services, Data Warehouses, Databases)      │
+└─────────────────────────────────────────────────────────┘

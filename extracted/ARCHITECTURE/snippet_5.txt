@@ -1,0 +1,15 @@
+# # Extracted from ARCHITECTURE.md (fence #5, lang='mouse click on map')
+        ↓
+Hit Testing (pixel → geographic coord)
+        ↓
+Query Features at Location
+        ↓
+Spatial Index Lookup
+        ↓
+Return Matching Features
+        ↓
+Apply Selection Style
+        ↓
+Trigger Selection Event
+        ↓
+UI Updates (highlight, attributes shown)

@@ -1,0 +1,5 @@
+# # Extracted from CONTRIBUTING.md (fence #5, lang='type(scope): subject line')
+
+Body paragraph. Explain the change and why it's needed.
+
+Closes #123

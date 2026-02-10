@@ -1,0 +1,2 @@
+# # Extracted from SUPPORTED_FORMATS.md (fence #7, lang='file → open data layer → select .gpkg file')
+→ Choose table(s) to import

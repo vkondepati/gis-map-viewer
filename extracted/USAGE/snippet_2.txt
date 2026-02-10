@@ -1,0 +1,11 @@
+# # Extracted from USAGE.md (fence #2, lang='file → add web layer')
+↓
+Select service type (WMS, WFS, WMTS, etc.)
+↓
+Enter service URL
+↓
+Select layers
+↓
+Configure parameters
+↓
+Click Add to Map

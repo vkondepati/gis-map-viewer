@@ -1,0 +1,7 @@
+# # Extracted from ARCHITECTURE.md (fence #9, lang='event source')
+    ├─ Layer.on('load', callback1)
+    ├─ Layer.on('load', callback2)
+    └─ Layer.emit('load', data)
+         ↓ (notifies all observers)
+    Callback1 executes
+    Callback2 executes

@@ -1,0 +1,2 @@
+# # Extracted from CRS_SUPPORT.md (fence #3, lang='layer crs (source) → wgs 84 (pivot) → project crs (target)')
+

@@ -1,0 +1,7 @@
+# # Extracted from USAGE.md (fence #1, lang='file → open data layer')
+↓
+Browse and select file
+↓
+Configure import settings
+↓
+Click Open

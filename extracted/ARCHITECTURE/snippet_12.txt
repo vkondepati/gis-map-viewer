@@ -1,0 +1,6 @@
+# # Extracted from ARCHITECTURE.md (fence #12, lang='datasourceadapter')
+├─ FileAdapter (for files)
+├─ WebServiceAdapter (for WMS/WFS)
+└─ DatabaseAdapter (for DuckDB/SF/Databricks)
+
+All implement: open(), query(), fetch(), close()
