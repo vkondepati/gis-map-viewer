@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="72" viewBox="0 0 360 72" role="img" aria-label="NexaMap wordmark">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0" stop-color="#0B66D0"/>
+      <stop offset="1" stop-color="#17B3A7"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon: stylized N + pin -->
+  <g transform="translate(8,8)">
+    <path d="M12 0 L24 0 L24 24 C24 36 12 48 12 48 C12 48 0 36 0 24 C0 10.7 10.7 0 24 0 Z" fill="url(#g)"/>
+    <text x="56" y="32" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#072A4D">Nexa</text>
+    <text x="142" y="32" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="400" fill="#121212">Map</text>
+  </g>
+</svg>
