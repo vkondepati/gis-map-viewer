@@ -1,0 +1,7 @@
+html,body,#map-div{height:100%;}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column;height:100vh}
+header{padding:8px 12px;background:#0a2540;color:#fff}
+#controls{padding:8px 12px;background:#f5f5f5;display:flex;gap:8px}
+#map-div{flex:1}
+
+#map-div .leaflet-container{height:100%}
