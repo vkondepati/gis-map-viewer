@@ -25,13 +25,13 @@ Complete guide to all Desktop GIS Map Viewer documentation.
 
 - **[API.md](API.md)** - Developer API reference
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** - Development setup and building from source
+- **[Electron App README](../electron-app/README.md)** - Development setup and running from source
 
 ## 🤝 Contributing and Community
 
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
 - **[ROADMAP.md](ROADMAP.md)** - Project roadmap and future plans
-- **[PROJECT_FILES.md](PROJECT_FILES.md)** - Open-source project structure
+- **[README.md](../README.md)** - Project overview and repository structure
 
 ## 📝 Document Guide
 
@@ -57,12 +57,12 @@ Complete guide to all Desktop GIS Map Viewer documentation.
 
 | Goal                         | Document                             |
 | ---------------------------- | ------------------------------------ |
-| Build from source            | [DEVELOPMENT.md](DEVELOPMENT.md)     |
+| Build from source            | [Electron App README](../electron-app/README.md) |
 | Use the API                  | [API.md](API.md)                     |
 | Understand system design     | [ARCHITECTURE.md](ARCHITECTURE.md)   |
 | Contribute code              | [CONTRIBUTING.md](CONTRIBUTING.md)   |
 | See what's planned           | [ROADMAP.md](ROADMAP.md)             |
-| Understand project structure | [PROJECT_FILES.md](PROJECT_FILES.md) |
+| Understand project structure | [README.md](../README.md) |
 
 ## 🔍 Quick Reference
 
@@ -123,8 +123,8 @@ See [USAGE.md](USAGE.md) for complete list.
 
 1. Read [CONTRIBUTING.md](CONTRIBUTING.md)
 2. Check [ROADMAP.md](ROADMAP.md)
-3. Look at [PROJECT_FILES.md](PROJECT_FILES.md)
-4. Review [DEVELOPMENT.md](DEVELOPMENT.md)
+3. Look at [README.md](../README.md)
+4. Review [Electron App README](../electron-app/README.md)
 
 ## 📚 Navigation Tips
 
@@ -134,7 +134,7 @@ See [USAGE.md](USAGE.md) for complete list.
 
 **Intermediate**: Add FEATURES → EDITING → DATA_WAREHOUSES
 
-**Advanced**: Continue with API → DEVELOPMENT → CONTRIBUTING
+**Advanced**: Continue with API → Electron App README → CONTRIBUTING
 
 ### By Topic
 
@@ -150,11 +150,11 @@ See [USAGE.md](USAGE.md) for complete list.
 
 **Troubleshooting**: TROUBLESHOOTING.md
 
-**Development**: DEVELOPMENT.md → API.md → ARCHITECTURE.md
+**Development**: ../electron-app/README.md → API.md → ARCHITECTURE.md
 
 **Contributing**: CONTRIBUTING.md
 
-**Project info**: ROADMAP.md → PROJECT_FILES.md
+**Project info**: ROADMAP.md → ../README.md
 
 ## 🔗 External Resources
 
@@ -204,10 +204,10 @@ See [USAGE.md](USAGE.md) for complete list.
 | CRS_SUPPORT       | ✅ Complete | Feb 2026     |
 | API               | ✅ Complete | Feb 2026     |
 | ARCHITECTURE      | ✅ Complete | Feb 2026     |
-| DEVELOPMENT       | ✅ Complete | Feb 2026     |
+| Electron App README | ✅ Complete | Feb 2026   |
 | CONTRIBUTING      | ✅ Complete | Feb 2026     |
 | ROADMAP           | ✅ Complete | Feb 2026     |
-| PROJECT_FILES     | ✅ Complete | Feb 2026     |
+| Project README    | ✅ Complete | Feb 2026     |
 
 ---
 

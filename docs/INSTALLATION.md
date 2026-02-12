@@ -441,7 +441,7 @@ See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for spatial analysis issues
 
 ## Getting Help
 
-- **Documentation**: See [docs/](docs/) directory
+- **Documentation**: See [docs/](../docs/) directory
 - **Issues**: [GitHub Issues](https://github.com/yourusername/gis-map-viewer/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/gis-map-viewer/discussions)
 - **Email**: support@example.com

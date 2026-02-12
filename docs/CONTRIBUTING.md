@@ -15,7 +15,7 @@ Thank you for your interest in contributing to Desktop GIS Map Viewer! This docu
 
 ### Code of Conduct
 
-We are committed to providing a welcoming and inclusive environment for all contributors. We adopt the [Contributor Covenant](CODE_OF_CONDUCT.md).
+We are committed to providing a welcoming and inclusive environment for all contributors. We adopt the [Contributor Covenant](../CODE_OF_CONDUCT.md).
 
 All participants must:
 

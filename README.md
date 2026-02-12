@@ -52,7 +52,7 @@ For detailed instructions, see [USAGE.md](docs/USAGE.md)
 | [API.md](docs/API.md)                         | Developer API reference       |
 | [CONFIGURATION.md](docs/CONFIGURATION.md)     | Configuration and preferences |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions   |
-| [DEVELOPMENT.md](docs/DEVELOPMENT.md)         | Development setup guide       |
+| [electron-app/README.md](electron-app/README.md) | Development setup guide    |
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md)       | How to contribute             |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md)       | System architecture           |
 | [ROADMAP.md](docs/ROADMAP.md)                 | Project roadmap               |
@@ -234,7 +234,7 @@ Built with remarkable open-source projects:
 
 - **Issues & Bugs**: [GitHub Issues](https://github.com/yourusername/gis-map-viewer/issues)
 - **Questions**: [GitHub Discussions](https://github.com/yourusername/gis-map-viewer/discussions)
-- **Security**: [SECURITY.md](docs/SECURITY.md)
+- **Security**: [SECURITY.md](SECURITY.md)
 - **Email**: support@example.com
 
 ---
