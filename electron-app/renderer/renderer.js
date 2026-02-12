@@ -1,5 +1,5 @@
 // Renderer: minimal map app that loads GeoJSON via preload API and displays in Leaflet
-let map, baseLayer, currentGeoJsonLayer;
+let map, baseLayer;
 let lastGeoJSONLoaded = null;
 let lastGeoJSONSourceCRS = null;
 let layers = []; // {id, name, layer, visible}
@@ -65,7 +65,7 @@ function reprojectGeoJSON(geojson, fromCRS, toCRS = 'EPSG:3857') {
   return transformGeometry(clone);
 }
 
-function createMap(crs) {
+function createMap() {
   // Destroy existing map if any
   if (map) {
     map.remove();
@@ -310,7 +310,7 @@ async function exportGeoJSON() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  createMap('EPSG:3857');
+  createMap();
 
   // Wire up collapsible sections and panels
   document.querySelectorAll('.toggle-btn').forEach((btn) => {
@@ -389,7 +389,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('crs-select').addEventListener('change', (ev) => {
     const selected = ev.target.value;
     // Recreate the map (Leaflet uses EPSG:3857) but allow reprojection of loaded GeoJSON
-    createMap('EPSG:3857');
+    createMap();
     if (lastGeoJSONLoaded) {
       // Reproject from user-selected source CRS to map CRS
       const transformed = reprojectGeoJSON(lastGeoJSONLoaded, selected, 'EPSG:3857');
