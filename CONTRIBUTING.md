@@ -34,6 +34,19 @@ git checkout -b feat/short-description
 
 ---
 
+
+## Help wanted and good first issues
+
+We tag beginner-friendly tasks with `good first issue` and broader community tasks with `help wanted`.
+
+- Check existing issues and filter by those labels.
+- If you want a starter task, open a discussion and share your background.
+- If you create an issue intended for newcomers, use the **Good first issue** template.
+
+See also: [`docs/OPEN_SOURCE_ISSUES.md`](docs/OPEN_SOURCE_ISSUES.md) for pre-scoped issue ideas maintainers can publish.
+
+---
+
 ## Code of conduct
 
 Please follow the project's `CODE_OF_CONDUCT.md`. Be kind and respectful during reviews and discussions.
