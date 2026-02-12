@@ -1,0 +1,4 @@
+node_modules/ 
+electron-app/node_modules/ 
+*.log 
+npm-debug.log*

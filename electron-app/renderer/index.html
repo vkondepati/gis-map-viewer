@@ -9,36 +9,82 @@
   </head>
   <body>
     <div id="app">
-      <aside id="sidebar">
-        <h2>NexaMap</h2>
-        <div class="section">
-          <div class="section-header">
-            <h3>Connections</h3>
-            <button class="toggle-btn" data-section="connections">−</button>
-          </div>
-          <div id="connections" class="section-content">
-            <div class="controls">
-              <label for="connection-select">Connections:</label>
-              <select id="connection-select">
-                <option value="file">File (GeoJSON)</option>
-                <option value="duckdb">DuckDB (local)</option>
-                <option value="snowflake">Snowflake</option>
-                <option value="databricks">Databricks</option>
-                <option value="iceberg">Apache Iceberg</option>
-              </select>
-              <div id="connection-controls">
-                <button id="open-btn">Browse File</button>
-                <input id="conn-string" placeholder="connection string / params" style="width:100%" />
-                <button id="connect-btn">Connect</button>
-              </div>
-              <label for="crs-select">CRS:</label>
-              <select id="crs-select">
-                <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
-                <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
-              </select>
+      <header id="toolbar">
+        <div id="toolbar-left">
+          <h1 style="margin:0;font-size:24px;font-weight:bold;color:#fff;letter-spacing:1px">NexaMap</h1>
+        </div>
+        <div id="toolbar-buttons">
+          <!-- Connect -->
+          <div id="connect-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-connect" title="Connect Data">🔗 Connect</button>
+            <div id="connect-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-conn="file">📁 Open File</button>
+              <button class="dropdown-item" data-conn="duckdb">🦆 DuckDB</button>
+              <button class="dropdown-item" data-conn="snowflake">❄️ Snowflake</button>
+              <button class="dropdown-item" data-conn="databricks">🧱 Databricks</button>
+              <button class="dropdown-item" data-conn="iceberg">🗻 Apache Iceberg</button>
             </div>
           </div>
+
+          <!-- Navigate -->
+          <div id="navigate-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-navigate" title="Navigation Tools">🧭 Navigate</button>
+            <div id="navigate-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="nav-zoomin">Zoom In</button>
+              <button class="dropdown-item" data-tool="nav-zoomout">Zoom Out</button>
+              <button class="dropdown-item" data-tool="nav-pan">Pan</button>
+              <button class="dropdown-item" data-tool="nav-zoomselect">Zoom to Select</button>
+            </div>
+          </div>
+
+          <!-- Select -->
+          <div id="select-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-select" title="Selection Tools">🔍 Select</button>
+            <div id="select-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="select-click">By Click</button>
+              <button class="dropdown-item" data-tool="select-rect">Rectangle</button>
+              <button class="dropdown-item" data-tool="select-poly">By Polygon</button>
+              <button class="dropdown-item" data-tool="select-line">By Line</button>
+            </div>
+          </div>
+
+          <!-- Edit -->
+          <div id="edit-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-edit" title="Edit Tools">✏️ Edit</button>
+            <div id="edit-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="edit-add">Add Feature</button>
+              <button class="dropdown-item" data-tool="edit-modify">Modify Feature</button>
+              <button class="dropdown-item" data-tool="edit-delete">Delete Feature</button>
+              <button class="dropdown-item" data-tool="update-attributes">Update Attributes</button>
+            </div>
+          </div>
+
+          <!-- Analysis -->
+          <div id="analysis-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-analysis" title="Analysis Tools">📊 Analysis</button>
+            <div id="analysis-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="buffer">Buffer</button>
+              <button class="dropdown-item" data-tool="intersect">Intersect</button>
+            </div>
+          </div>
+
+          <!-- Print -->
+          <div id="layers-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-layers" title="Layer Tools">🗂️ Layers</button>
+            <div id="layers-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-layer-action="create">➕ Create Layer</button>
+              <button class="dropdown-item" data-layer-action="save">💾 Save Layers</button>
+              <button class="dropdown-item" data-layer-action="load">📂 Load Layers</button>
+              <div class="dropdown-sep"></div>
+              <span class="dropdown-group-title">Layer Operations</span>
+              <button class="dropdown-item" data-layer-action="draworder">Set Draw Order</button>
+            </div>
+          </div>
+          <button class="toolbar-btn" id="btn-print" title="Print Map">🖨️ Print</button>
         </div>
+      </header>
+      <div id="app-content">
+      <aside id="sidebar">
         <div class="section">
           <div class="section-header">
             <h3>Table of Contents</h3>
@@ -49,6 +95,10 @@
           </div>
         </div>
       </aside>
+      <!-- Context Menu for Layer Labels -->
+      <div id="layer-context-menu" class="context-menu" style="display:none;">
+        <div id="label-options-container"></div>
+      </div>
       <main id="map-container">
         <div id="map"></div>
         <div id="attributes-panel" class="bottom-panel collapsed">
@@ -67,12 +117,165 @@
           </div>
         </div>
       </main>
+      </div>
+
+      <!-- Layer Management Dialogs -->
+      <div id="dialog-create-layer" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Create New Layer</h3>
+          <label>Layer Name:</label>
+          <input id="create-layer-name" placeholder="Layer name" />
+          <label>Geometry Type:</label>
+          <select id="create-layer-geometry">
+            <option value="Point">Point</option>
+            <option value="LineString">LineString</option>
+            <option value="Polygon">Polygon</option>
+          </select>
+          <div style="margin-top:20px;">
+            <button id="create-layer-ok">Create</button>
+            <button id="create-layer-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-rename-layer" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Rename Layer</h3>
+          <input id="rename-layer-name" placeholder="New layer name" />
+          <div style="margin-top:20px;">
+            <button id="rename-layer-ok">Rename</button>
+            <button id="rename-layer-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-draworder" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Set Draw Order</h3>
+          <ul id="draworder-list" style="list-style:none;padding:0;margin:0;"></ul>
+          <div style="margin-top:20px;">
+            <button id="draworder-ok">Apply</button>
+            <button id="draworder-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-buffer" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Buffer Analysis</h3>
+          <label>Buffer Value:</label>
+          <input id="buffer-distance" type="number" min="0" step="any" value="100" placeholder="Distance value" />
+          <label>Buffer Units:</label>
+          <select id="buffer-units">
+            <option value="meters">Meters</option>
+            <option value="kilometers">Kilometers</option>
+            <option value="miles">Miles</option>
+            <option value="feet">Feet</option>
+          </select>
+          <div style="margin-top:20px;">
+            <button id="buffer-ok">Run Buffer</button>
+            <button id="buffer-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connection Dialogs -->
+      <div id="modal-overlay" class="modal-overlay"></div>
+      <div id="dialog-file" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Open GeoJSON File</h3>
+          <input id="dialog-file-path" placeholder="File path (optional)" style="width:100%;margin:10px 0;" />
+          <button id="dialog-file-browse">Browse...</button>
+          <label style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Source Coordinate System:</label>
+          <select id="dialog-file-crs" style="width:100%;margin:10px 0;">
+            <option value="EPSG:3857">EPSG:3857 (Web Mercator - Default)</option>
+            <option value="EPSG:4326">EPSG:4326 (WGS 84 - Lon/Lat)</option>
+            <option value="EPSG:4326-latlon">EPSG:4326 Axis Order (Lat/Lon)</option>
+            <option value="EPSG:2154">EPSG:2154 (French Lambert 93)</option>
+            <option value="EPSG:32633">EPSG:32633 (UTM Zone 33N)</option>
+            <option value="EPSG:25832">EPSG:25832 (ETRS89 UTM 32N)</option>
+          </select>
+          <label style="font-size:12px;color:#ccc;display:flex;align-items:center;gap:8px;margin:12px 0;">
+            <input id="dialog-file-swap-coords" type="checkbox" style="width:auto;" />
+            Swap coordinates (if points appear in wrong location)
+          </label>
+          <div style="margin-top:20px;">
+            <button id="dialog-file-ok">OK</button>
+            <button id="dialog-file-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-duckdb" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>DuckDB Connection</h3>
+          <input id="dialog-duckdb-path" placeholder="Database path / :memory:" style="width:100%;margin:10px 0;" />
+          <select id="dialog-duckdb-crs" style="width:100%;margin:10px 0;">
+            <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
+            <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
+          </select>
+          <div style="margin-top:20px;">
+            <button id="dialog-duckdb-ok">Connect</button>
+            <button id="dialog-duckdb-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-snowflake" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Snowflake Connection</h3>
+          <input id="dialog-snowflake-account" placeholder="Account" style="width:100%;margin:10px 0;" />
+          <input id="dialog-snowflake-user" placeholder="User" style="width:100%;margin:10px 0;" />
+          <input id="dialog-snowflake-password" type="password" placeholder="Password" style="width:100%;margin:10px 0;" />
+          <select id="dialog-snowflake-crs" style="width:100%;margin:10px 0;">
+            <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
+            <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
+          </select>
+          <div style="margin-top:20px;">
+            <button id="dialog-snowflake-ok">Connect</button>
+            <button id="dialog-snowflake-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-databricks" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Databricks Connection</h3>
+          <input id="dialog-databricks-host" placeholder="Host / Workspace" style="width:100%;margin:10px 0;" />
+          <input id="dialog-databricks-token" placeholder="Token" style="width:100%;margin:10px 0;" />
+          <select id="dialog-databricks-crs" style="width:100%;margin:10px 0;">
+            <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
+            <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
+          </select>
+          <div style="margin-top:20px;">
+            <button id="dialog-databricks-ok">Connect</button>
+            <button id="dialog-databricks-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-iceberg" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Apache Iceberg Connection</h3>
+          <input id="dialog-iceberg-warehouse" placeholder="Warehouse path" style="width:100%;margin:10px 0;" />
+          <input id="dialog-iceberg-catalog" placeholder="Catalog name" style="width:100%;margin:10px 0;" />
+          <select id="dialog-iceberg-crs" style="width:100%;margin:10px 0;">
+            <option value="EPSG:3857">EPSG:3857 (WebMercator)</option>
+            <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
+          </select>
+          <div style="margin-top:20px;">
+            <button id="dialog-iceberg-ok">Connect</button>
+            <button id="dialog-iceberg-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- proj4 and proj4leaflet for CRS reprojection support -->
     <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
     <script src="https://unpkg.com/proj4leaflet@1.0.2/src/proj4leaflet.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>
