@@ -56,6 +56,7 @@ For detailed instructions, see [USAGE.md](docs/USAGE.md)
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md)       | How to contribute             |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md)       | System architecture           |
 | [ROADMAP.md](docs/ROADMAP.md)                 | Project roadmap               |
+| [OPEN_SOURCE_ISSUES.md](docs/OPEN_SOURCE_ISSUES.md) | Starter contribution ideas |
 
 ## 🔧 System Requirements
 
@@ -173,6 +174,16 @@ We welcome contributions from everyone! Whether you're fixing bugs, adding featu
 4. **Submit a Pull Request**
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
+
+### Looking for a place to start?
+
+We actively welcome new contributors. If you're looking for an approachable way to help:
+
+- Browse our issue templates (Bug, Feature, and Good First Issue)
+- Pick an item from [Open Source Starter Issues](docs/OPEN_SOURCE_ISSUES.md)
+- Open a draft PR early and ask for feedback
+
+If you'd like maintainers to suggest a task for your skill level, open a discussion and introduce yourself.
 
 ## 📋 Community
 
