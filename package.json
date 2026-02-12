@@ -1,0 +1,9 @@
+{
+  "name": "gis-map-viewer-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "start": "npm start --prefix electron-app",
+    "dev": "npm run dev --prefix electron-app"
+  }
+}
