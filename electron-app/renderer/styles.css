@@ -92,7 +92,7 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 .sym-swatch{width:20px;height:20px;border-radius:4px;border:1px solid #ccc;display:inline-block;cursor:pointer}
 .sym-editor{background:#022939;padding:8px;border-radius:4px;margin-top:6px}
 .sym-editor label{color:#fff;font-size:12px;display:block;margin-bottom:6px}
-.sym-editor input[type="number"],.sym-editor input[type="color"],.sym-editor input[type="range"]{width:100%}
+.sym-editor input[type="number"],.sym-editor input[type="color"],.sym-editor input[type="range"],.sym-editor select{width:100%}
 
 /* Connection Dialogs */
 .modal-overlay{
@@ -133,13 +133,70 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 .dialog-content{background:#0d2740;color:#fff;padding:20px;min-width:350px;border-radius:6px}
 .dialog-content h3{margin:0 0 12px;font-size:16px}
 .dialog-content input,.dialog-content select{width:100%;padding:8px;margin:8px 0;border:1px solid #366b94;background:#072034;color:#fff;border-radius:4px;box-sizing:border-box}
+.dialog-content textarea{width:100%;padding:8px;margin:8px 0;border:1px solid #366b94;background:#072034;color:#fff;border-radius:4px;box-sizing:border-box;resize:vertical}
 .dialog-content input::placeholder{color:#999}
 .dialog-content button{background:#366b94;color:#fff;border:none;padding:8px 16px;margin-top:8px;margin-right:8px;border-radius:4px;cursor:pointer;transition:background 0.2s}
 .dialog-content button:hover{background:#4a8ec0}
+
+/* Compact add-feature attributes dialog */
+#dialog-add-feature-attrs{
+  top:72px;
+  right:16px;
+  left:auto;
+  transform:none;
+  width:min(400px, calc(100vw - 32px));
+  padding:10px;
+}
+#dialog-add-feature-attrs .dialog-content{
+  min-width:0;
+  width:100%;
+  max-height:76vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+#add-feature-attrs-container{
+  max-height:42vh;
+  overflow-y:auto;
+  padding-right:6px;
+}
+@media (max-width: 700px){
+  #dialog-add-feature-attrs{
+    top:50%;
+    left:50%;
+    right:auto;
+    transform:translate(-50%,-50%);
+  }
+}
 /* Context Menu */
 .context-menu{position:fixed;background:#0d2740;border:1px solid #366b94;border-radius:4px;z-index:2000;box-shadow:0 2px 8px rgba(0,0,0,0.3);min-width:180px}
 .context-menu.show{display:block !important}
 .context-menu button{display:block;width:100%;text-align:left;padding:10px 15px;background:none;border:none;color:#fff;cursor:pointer;font-size:14px;transition:background 0.2s}
 .context-menu button:hover{background:#366b94}
+.context-menu button:disabled{opacity:0.45;cursor:not-allowed}
 .context-menu button:first-child{border-radius:4px 4px 0 0}
 .context-menu button:last-child{border-radius:0 0 4px 4px}
+.label-marker{background:transparent;border:none}
+
+/* PDF print layout */
+#pdf-print-layout{position:fixed;inset:0;background:#eef3f7;z-index:3500;padding:14px;box-sizing:border-box;overflow:auto}
+.print-sheet{min-height:95vh;display:flex;flex-direction:column;background:#fff;border:1px solid #d4dde6}
+.print-header{padding:10px 12px;border-bottom:1px solid #dce5ee;font-size:16px;font-weight:700;color:#0a1f2e}
+.print-body{flex:1;display:flex;min-height:0}
+.print-map-wrap{flex:1;position:relative;padding:10px}
+#pdf-print-map{height:100%;width:100%;border:1px solid #ccd8e5}
+.print-side{width:280px;border-left:1px solid #dce5ee;padding:10px;overflow-y:auto;background:#f7fafc}
+.print-north{position:absolute;top:20px;right:20px;background:#fff;border:1px solid #bac7d3;padding:6px 8px;font-weight:700;font-size:12px}
+.print-legend-item{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;color:#1e3347}
+.print-legend-swatch{width:16px;height:16px;border:1px solid #6a8198}
+.print-attrs-pages{margin-top:12px;background:#fff;border:1px solid #d4dde6;padding:12px}
+.print-page-break{break-before:page;page-break-before:always}
+.print-attr-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+.print-attr-table th,.print-attr-table td{border:1px solid #d4dde6;padding:4px;text-align:left;vertical-align:top;word-break:break-word}
+.print-attr-table th{background:#ecf2f8}
+
+@media print{
+  #pdf-print-layout{position:static !important;inset:auto !important;padding:0 !important;background:#fff !important;overflow:visible !important}
+  .print-sheet{min-height:auto !important;border:none !important}
+  .print-attrs-pages{border:none !important;padding:0 !important}
+}

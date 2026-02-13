@@ -5,7 +5,26 @@ let lastGeoJSONSourceCRS = null;
 let layers = []; // {id, name, layer, visible, geojson, geometryType}
 let layerIdSeq = 1;
 let activeLayerId = null;
+let currentProjectPath = null;
+let projectDirty = false;
 const dirtyLayerIds = new Set();
+
+function updateProjectTitle() {
+  const titleEl = document.getElementById('project-title-name');
+  if (!titleEl) return;
+  if (!currentProjectPath) {
+    titleEl.textContent = projectDirty ? '(unsaved*)' : '(unsaved)';
+    return;
+  }
+  titleEl.textContent = projectDirty
+    ? `(${getFileBaseName(currentProjectPath)}.prj*)`
+    : `(${getFileBaseName(currentProjectPath)}.prj)`;
+}
+
+function markProjectDirty(isDirty = true) {
+  projectDirty = !!isDirty;
+  updateProjectTitle();
+}
 
 function normalizeGeometryType(geomType) {
   switch (geomType) {
@@ -34,6 +53,7 @@ function markLayerDirty(layerId, isDirty = true) {
   if (!layerId) return;
   if (isDirty) dirtyLayerIds.add(layerId);
   else dirtyLayerIds.delete(layerId);
+  if (isDirty) markProjectDirty(true);
   refreshLayerListState();
 }
 
@@ -51,13 +71,27 @@ function getActiveLayerEntry() {
   return layers.find((entry) => entry.id === activeLayerId) || null;
 }
 
-async function saveLayerToFile(layerId) {
+async function saveLayerToFile(layerId, options = {}) {
+  const { allowPromptIfMissingSource = false } = options;
   const entry = layers.find((l) => l.id === layerId);
   if (!entry || !entry.geojson) return false;
   const content = JSON.stringify(entry.geojson, null, 2);
+  if (entry.sourcePath) {
+    const writeRes = await window.electronAPI.writeGeoJSON(entry.sourcePath, content);
+    if (writeRes && writeRes.ok) {
+      markLayerDirty(layerId, false);
+      return true;
+    }
+  }
+
+  if (!allowPromptIfMissingSource) {
+    return false;
+  }
+
   const defaultName = `${entry.name || 'layer'}.geojson`;
   const res = await window.electronAPI.saveGeoJSON(defaultName, content);
   if (res && !res.canceled) {
+    entry.sourcePath = res.path;
     markLayerDirty(layerId, false);
     return true;
   }
@@ -73,13 +107,10 @@ async function setActiveLayer(layerId, options = {}) {
   const previousLayerId = activeLayerId;
 
   if (promptForSave && previousLayerId && dirtyLayerIds.has(previousLayerId)) {
-    const saveFirst = confirm('Active layer has unsaved edits. Click OK to save before switching layers.');
-    if (saveFirst) {
-      const saved = await saveLayerToFile(previousLayerId);
-      if (!saved) return false;
-    } else {
-      const continueWithoutSaving = confirm('Switch without saving edits? Click OK to switch, Cancel to stay on the current layer.');
-      if (!continueWithoutSaving) return false;
+    const saved = await saveLayerToFile(previousLayerId, { allowPromptIfMissingSource: false });
+    if (!saved) {
+      alert('Unable to save edits for active layer to its original file. Layer switch canceled.');
+      return false;
     }
   }
 
@@ -241,30 +272,111 @@ function createMap(crs) {
   }).addTo(map);
 }
 
-function addGeoJSONLayer(geojson, name) {
-  // create layer with pointToLayer to produce circleMarkers so symbology can be updated via setStyle
-  const leafletLayer = L.geoJSON(geojson, {
+function getDashArrayForLineStyle(lineStyle) {
+  if (lineStyle === 'dashed') return '8,6';
+  if (lineStyle === 'dotted') return '2,6';
+  return null;
+}
+
+function getDefaultSymbology(geometryType = 'Point') {
+  const base = {
+    color: '#ff7800',
+    fillColor: '#ff7800',
+    radius: 6,
+    weight: 2,
+    fillOpacity: 0.7,
+    opacity: 1,
+    markerType: 'circle',
+    lineStyle: 'solid'
+  };
+  if (geometryType === 'LineString') return Object.assign({}, base, { fillOpacity: 0, radius: 0 });
+  if (geometryType === 'Polygon') return Object.assign({}, base, { fillOpacity: 0.35 });
+  return base;
+}
+
+function createPointDivIcon(sym) {
+  const size = Math.max(6, Number(sym.radius || 6) * 2);
+  const half = Math.round(size / 2);
+  const borderWidth = Math.max(1, Number(sym.weight || 1));
+  const strokeColor = sym.color || '#ff7800';
+  const fillColor = sym.fillColor || strokeColor;
+  const opacity = Number.isFinite(Number(sym.opacity)) ? Number(sym.opacity) : 1;
+  const markerType = sym.markerType || 'circle';
+  let shapeStyle = `width:${size}px;height:${size}px;background:${fillColor};border:${borderWidth}px solid ${strokeColor};opacity:${opacity};`;
+  if (markerType === 'square') {
+    shapeStyle += 'border-radius:2px;';
+  } else if (markerType === 'diamond') {
+    shapeStyle += 'border-radius:1px;transform:rotate(45deg);';
+  } else if (markerType === 'triangle') {
+    shapeStyle = `width:0;height:0;opacity:${opacity};border-left:${half}px solid transparent;border-right:${half}px solid transparent;border-bottom:${size}px solid ${fillColor};`;
+  } else {
+    shapeStyle += 'border-radius:50%;';
+  }
+  return L.divIcon({
+    className: 'point-marker-div',
+    html: `<div style="${shapeStyle}"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [half, half]
+  });
+}
+
+function createLeafletLayerForGeoJSON(geojson, layerId) {
+  return L.geoJSON(geojson, {
     pointToLayer: (feature, latlng) => {
-      // use per-layer symbology if present, fallback to defaults
-      const sym = getLayerSymDefaults() || { radius: 6, color: '#ff7800', fillColor: '#ff7800', weight: 2, fillOpacity: 0.7 };
+      const sym = getLayerSymDefaults(layerId) || getDefaultSymbology('Point');
+      if (sym.markerType && sym.markerType !== 'circle') {
+        return L.marker(latlng, { icon: createPointDivIcon(sym) });
+      }
       return L.circleMarker(latlng, {
         radius: sym.radius,
         color: sym.color,
         fillColor: sym.fillColor,
         weight: sym.weight,
         fillOpacity: sym.fillOpacity,
+        opacity: sym.opacity
       });
     },
-    style: (feature) => {
-      const sym = getLayerSymDefaults() || { color: '#ff7800', weight: 2, fillOpacity: 0.7 };
-      return { color: sym.color, weight: sym.weight, fillOpacity: sym.fillOpacity };
+    style: () => {
+      const sym = getLayerSymDefaults(layerId) || getDefaultSymbology('LineString');
+      return {
+        color: sym.color,
+        weight: sym.weight,
+        fillColor: sym.fillColor,
+        fillOpacity: sym.fillOpacity,
+        opacity: sym.opacity,
+        dashArray: getDashArrayForLineStyle(sym.lineStyle)
+      };
     },
     onEachFeature: (feature, layer) => {
-      let info = '<pre>' + JSON.stringify(feature.properties || {}, null, 2) + '</pre>';
+      const info = '<pre>' + JSON.stringify(feature.properties || {}, null, 2) + '</pre>';
       layer.bindPopup(info);
-    },
-  }).addTo(map);
+    }
+  });
+}
+
+function getFileBaseName(filePath = '') {
+  const name = String(filePath).split(/[\\/]/).pop() || '';
+  return name.replace(/\.[^/.]+$/, '') || 'Layer';
+}
+
+function addGeoJSONLayer(geojson, name, options = {}) {
+  const id = 'layer-' + layerIdSeq++;
+  const geometryType = inferGeometryTypeFromGeoJSON(geojson, 'Point');
+  if (!layerSym[id]) {
+    entrySetSymDefaults(id, getDefaultSymbology(geometryType));
+  }
+  const leafletLayer = createLeafletLayerForGeoJSON(geojson, id).addTo(map);
   currentGeoJsonLayer = leafletLayer;
+  layers.push({
+    id,
+    name: name || 'Layer ' + id,
+    layer: leafletLayer,
+    visible: true,
+    geojson,
+    geometryType,
+    sourcePath: options.sourcePath || null
+  });
+  activeLayerId = id;
 
   // Fit to layer bounds if available
   try {
@@ -273,11 +385,6 @@ function addGeoJSONLayer(geojson, name) {
   } catch (e) {
     // ignore
   }
-
-  const id = 'layer-' + layerIdSeq++;
-  const geometryType = inferGeometryTypeFromGeoJSON(geojson, 'Point');
-  layers.push({ id, name: name || 'Layer ' + id, layer: leafletLayer, visible: true, geojson, geometryType });
-  activeLayerId = id;
 
   // add to layer list (TOC) with checkbox
   const li = document.createElement('li');
@@ -294,9 +401,7 @@ function addGeoJSONLayer(geojson, name) {
   const sw = document.createElement('div');
   sw.className = 'sym-swatch';
   sw.dataset.layerId = id;
-  // default symbology (points use radius,color)
-  const defaultSym = { color: '#ff7800', fillColor: '#ff7800', radius: 6, weight: 2, fillOpacity: 0.7 };
-  entrySetSymDefaults(id, defaultSym);
+  const defaultSym = getLayerSymDefaults(id) || getDefaultSymbology(geometryType);
   applySymToSwatch(sw, defaultSym);
   sw.addEventListener('click', (e) => showSymEditor(e.target.dataset.layerId, li));
 
@@ -319,12 +424,6 @@ function addGeoJSONLayer(geojson, name) {
     }
   });
   
-  // Add right-click context menu for layer labels
-  li.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    showLayerContextMenu(id, geojson, e);
-  });
-  
   document.getElementById('layer-list').appendChild(li);
 
   // populate attribute table for the last loaded geojson
@@ -335,102 +434,199 @@ function addGeoJSONLayer(geojson, name) {
 
 // Layer label context menu
 function showLayerContextMenu(layerId, geojson, event) {
-  const menu = document.getElementById('layer-context-menu');
-  const container = document.getElementById('label-options-container');
-  container.innerHTML = '';
-  
-  // Get column names from geojson features
-  const columns = geojson.features && geojson.features.length > 0 
-    ? Object.keys(geojson.features[0].properties || {})
-    : [];
-  
-  // Add "None" option
-  const noneBtn = document.createElement('button');
-  noneBtn.textContent = 'No Labels';
-  noneBtn.addEventListener('click', () => {
-    removeLayerLabels(layerId);
-    menu.style.display = 'none';
-  });
-  container.appendChild(noneBtn);
-  
-  if (columns.length > 0) {
-    const sep = document.createElement('div');
-    sep.style.borderTop = '1px solid #366b94';
-    sep.style.margin = '0';
-    container.appendChild(sep);
-  }
-  
-  // Add column options
-  columns.forEach(col => {
-    const btn = document.createElement('button');
-    btn.textContent = col;
-    btn.addEventListener('click', () => {
-      displayLayerLabels(layerId, col, geojson);
-      menu.style.display = 'none';
-    });
-    container.appendChild(btn);
-  });
-  
-  // Position menu
-  menu.style.left = event.clientX + 'px';
-  menu.style.top = event.clientY + 'px';
-  menu.style.display = 'block';
+  openLabelSettingsDialog(layerId, geojson);
 }
 
 // Store for layer labels
 const layerLabels = {};
+let labelSettingsTargetLayerId = null;
+const LABEL_STYLE_DEFAULTS = {
+  fontSize: 12,
+  color: '#111111',
+  placement: 'center'
+};
 
-// Display labels on map for a layer based on column
-function displayLayerLabels(layerId, columnName, geojson) {
-  const layer = layers.find(l => l.id === layerId);
-  if (!layer) return;
-  
-  removeLayerLabels(layerId);
-  layerLabels[layerId] = { columnName, geojson };
-  
-  geojson.features.forEach((feature, idx) => {
-    const value = feature.properties ? feature.properties[columnName] : '';
-    if (value && feature.geometry && feature.geometry.coordinates) {
-      const coords = feature.geometry.coordinates;
-      let latLng;
-      if (feature.geometry.type === 'Point') {
-        latLng = L.latLng(coords[1], coords[0]);
-      } else if (feature.geometry.type === 'LineString' || feature.geometry.type === 'Polygon') {
-        // For lines/polygons, label at first coordinate
-        const first = coords[0];
-        latLng = L.latLng(first[1], first[0]);
-      }
-      
-      if (latLng) {
-        const marker = L.marker(latLng, {
-          icon: L.divIcon({
-            className: 'label-marker',
-            html: '<div style="background:#fff;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.3)">' + value + '</div>',
-            iconSize: null,
-            iconAnchor: null
-          })
-        }).addTo(map);
-        marker.layerId = layerId;
-      }
-    }
-  });
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-// Remove labels for a layer
-function removeLayerLabels(layerId) {
-  delete layerLabels[layerId];
-  // Remove all marker labels for this layer
+function getLabelPlacementTransform(placement) {
+  switch (placement) {
+    case 'above':
+      return 'translate(-50%, -120%)';
+    case 'below':
+      return 'translate(-50%, 20%)';
+    case 'left':
+      return 'translate(-110%, -50%)';
+    case 'right':
+      return 'translate(10%, -50%)';
+    case 'center':
+    default:
+      return 'translate(-50%, -50%)';
+  }
+}
+
+function getLayerLabelFields(geojson) {
+  if (!geojson || !Array.isArray(geojson.features)) return [];
+  const fields = new Set();
+  geojson.features.forEach((feature) => {
+    const props = feature && feature.properties ? feature.properties : {};
+    Object.keys(props).forEach((key) => fields.add(key));
+  });
+  return Array.from(fields);
+}
+
+function showDialog(dialogId) {
+  const overlay = document.getElementById('modal-overlay');
+  const dialog = document.getElementById(dialogId);
+  if (!overlay || !dialog) return;
+  overlay.classList.add('visible');
+  dialog.classList.add('visible');
+  dialog.classList.remove('modal-hidden');
+}
+
+function hideDialog(dialogId) {
+  const overlay = document.getElementById('modal-overlay');
+  const dialog = document.getElementById(dialogId);
+  if (!overlay || !dialog) return;
+  overlay.classList.remove('visible');
+  dialog.classList.remove('visible');
+  dialog.classList.add('modal-hidden');
+}
+
+function openLabelSettingsDialog(layerId, geojsonOverride) {
+  const layerEntry = layers.find((layerItem) => layerItem.id === layerId);
+  if (!layerEntry) return;
+  const geojson = geojsonOverride || layerEntry.geojson;
+  const fields = getLayerLabelFields(geojson);
+  if (fields.length === 0) {
+    alert('No fields available for labeling in this layer.');
+    return;
+  }
+
+  labelSettingsTargetLayerId = layerId;
+  const fieldSelect = document.getElementById('label-field-select');
+  const fontSizeInput = document.getElementById('label-font-size');
+  const colorInput = document.getElementById('label-font-color');
+  const placementSelect = document.getElementById('label-placement');
+  if (!fieldSelect || !fontSizeInput || !colorInput || !placementSelect) return;
+
+  const existing = layerLabels[layerId] || {};
+  const existingOptions = Object.assign({}, LABEL_STYLE_DEFAULTS, existing.options || {});
+  const selectedField = existing.columnName && fields.includes(existing.columnName) ? existing.columnName : fields[0];
+
+  fieldSelect.innerHTML = '';
+  fields.forEach((field) => {
+    const opt = document.createElement('option');
+    opt.value = field;
+    opt.textContent = field;
+    fieldSelect.appendChild(opt);
+  });
+  fieldSelect.value = selectedField;
+  fontSizeInput.value = String(existingOptions.fontSize);
+  colorInput.value = existingOptions.color;
+  placementSelect.value = existingOptions.placement;
+
+  showDialog('dialog-label-settings');
+}
+
+function getLabelLatLng(feature) {
+  if (!feature || !feature.geometry || !feature.geometry.coordinates) return null;
+  const coords = feature.geometry.coordinates;
+  const type = feature.geometry.type;
+  let first = null;
+
+  if (type === 'Point') {
+    first = coords;
+  } else if (type === 'MultiPoint' || type === 'LineString') {
+    first = coords[0];
+  } else if (type === 'MultiLineString' || type === 'Polygon') {
+    first = coords[0] && coords[0][0];
+  } else if (type === 'MultiPolygon') {
+    first = coords[0] && coords[0][0] && coords[0][0][0];
+  }
+
+  if (!first || typeof first[0] !== 'number' || typeof first[1] !== 'number') return null;
+  return L.latLng(first[1], first[0]);
+}
+
+function clearLayerLabelMarkers(layerId) {
   map.eachLayer((layer) => {
-    if (layer.layerId === layerId && layer.setIcon) {
+    if (layer.layerId === layerId && layer.isLayerLabelMarker) {
       map.removeLayer(layer);
     }
   });
 }
 
+function isLayerVisible(layerId) {
+  const entry = layers.find((layerEntry) => layerEntry.id === layerId);
+  return !!(entry && entry.visible !== false);
+}
+
+function renderLayerLabels(layerId) {
+  const labelState = layerLabels[layerId];
+  clearLayerLabelMarkers(layerId);
+  if (!labelState || labelState.enabled === false || !isLayerVisible(layerId)) return;
+
+  const { columnName, geojson } = labelState;
+  const styleOptions = Object.assign({}, LABEL_STYLE_DEFAULTS, labelState.options || {});
+  if (!geojson || !Array.isArray(geojson.features)) return;
+
+  geojson.features.forEach((feature) => {
+    const value = feature && feature.properties ? feature.properties[columnName] : '';
+    const latLng = getLabelLatLng(feature);
+    if (!value || !latLng) return;
+
+    const html = '<div style="pointer-events:none;white-space:nowrap;font-weight:700;color:' + styleOptions.color + ';font-size:' + styleOptions.fontSize + 'px;transform:' + getLabelPlacementTransform(styleOptions.placement) + ';text-shadow:0 0 2px rgba(255,255,255,0.7),0 0 3px rgba(0,0,0,0.35)">' + escapeHtml(value) + '</div>';
+    const marker = L.marker(latLng, {
+      icon: L.divIcon({
+        className: 'label-marker',
+        html,
+        iconSize: null,
+        iconAnchor: null
+      })
+    }).addTo(map);
+    marker.layerId = layerId;
+    marker.isLayerLabelMarker = true;
+  });
+}
+
+// Display labels on map for a layer based on column
+function displayLayerLabels(layerId, columnName, geojson, options = null) {
+  const layer = layers.find((l) => l.id === layerId);
+  if (!layer) return;
+
+  const existing = layerLabels[layerId] || {};
+  const styleOptions = Object.assign({}, LABEL_STYLE_DEFAULTS, existing.options || {}, options || {});
+  layerLabels[layerId] = { columnName, geojson, enabled: true, options: styleOptions };
+  renderLayerLabels(layerId);
+  markProjectDirty(true);
+}
+
+function setLayerLabelEnabled(layerId, enabled) {
+  const labelState = layerLabels[layerId];
+  if (!labelState) return;
+  labelState.enabled = !!enabled;
+  renderLayerLabels(layerId);
+  markProjectDirty(true);
+}
+
+// Remove labels for a layer
+function removeLayerLabels(layerId) {
+  clearLayerLabelMarkers(layerId);
+  delete layerLabels[layerId];
+  markProjectDirty(true);
+}
+
 // Close context menu on document click
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('layer-context-menu');
-  if (!e.target.closest('#layer-context-menu') && !e.target.closest('#layer-list')) {
+  if (menu && !e.target.closest('#layer-context-menu') && !e.target.closest('#layer-list')) {
     menu.style.display = 'none';
   }
 });
@@ -446,7 +642,35 @@ function getLayerSymDefaults(id) {
 }
 function applySymToSwatch(swatchEl, sym) {
   if (!swatchEl) return;
+  swatchEl.style.width = '20px';
+  swatchEl.style.height = '20px';
   swatchEl.style.background = sym.fillColor || sym.color || '#888';
+  if (sym.markerType === 'square') {
+    swatchEl.style.borderRadius = '2px';
+    swatchEl.style.transform = 'none';
+  } else if (sym.markerType === 'diamond') {
+    swatchEl.style.borderRadius = '1px';
+    swatchEl.style.transform = 'rotate(45deg)';
+  } else if (sym.markerType === 'triangle') {
+    swatchEl.style.borderRadius = '0';
+    swatchEl.style.transform = 'none';
+    swatchEl.style.width = '0';
+    swatchEl.style.height = '0';
+    swatchEl.style.background = 'transparent';
+    swatchEl.style.borderLeft = '10px solid transparent';
+    swatchEl.style.borderRight = '10px solid transparent';
+    swatchEl.style.borderBottom = `18px solid ${sym.fillColor || sym.color || '#888'}`;
+    swatchEl.style.borderTop = '0';
+    return;
+  } else {
+    swatchEl.style.borderRadius = '50%';
+    swatchEl.style.transform = 'none';
+  }
+  swatchEl.style.border = '1px solid #ccc';
+  swatchEl.style.borderLeft = '';
+  swatchEl.style.borderRight = '';
+  swatchEl.style.borderTop = '';
+  swatchEl.style.borderBottom = '';
 }
 
 function applySymbologyToLayer(id) {
@@ -454,44 +678,125 @@ function applySymbologyToLayer(id) {
   if (!entry) return;
   const sym = layerSym[id];
   if (!sym) return;
+
+  const geometryType = normalizeGeometryType(entry.geometryType || inferGeometryTypeFromGeoJSON(entry.geojson, 'Point'));
+  if (geometryType === 'Point') {
+    const isVisible = entry.visible !== false && map.hasLayer(entry.layer);
+    if (entry.layer) entry.layer.remove();
+    entry.layer = createLeafletLayerForGeoJSON(entry.geojson, id);
+    if (isVisible) entry.layer.addTo(map);
+    if (activeLayerId === id) currentGeoJsonLayer = entry.layer;
+    markProjectDirty(true);
+    return;
+  }
+
   // iterate over each child layer
   entry.layer.eachLayer((ly) => {
     // path layers (LineString/Polygon) support setStyle
     if (typeof ly.setStyle === 'function') {
-      ly.setStyle({ color: sym.color, weight: sym.weight, fillColor: sym.fillColor, fillOpacity: sym.fillOpacity });
+      ly.setStyle({
+        color: sym.color,
+        weight: sym.weight,
+        fillColor: sym.fillColor,
+        fillOpacity: sym.fillOpacity,
+        opacity: sym.opacity,
+        dashArray: getDashArrayForLineStyle(sym.lineStyle)
+      });
     }
     // circleMarker supports setRadius via setStyle in Leaflet v1.x
-    if (ly.setRadius) {
-      try { ly.setStyle({ radius: sym.radius, color: sym.color, fillColor: sym.fillColor, weight: sym.weight, fillOpacity: sym.fillOpacity }); } catch (e) {}
+    if (ly.setRadius && (!sym.markerType || sym.markerType === 'circle')) {
+      try {
+        ly.setStyle({
+          radius: sym.radius,
+          color: sym.color,
+          fillColor: sym.fillColor,
+          weight: sym.weight,
+          fillOpacity: sym.fillOpacity,
+          opacity: sym.opacity
+        });
+      } catch (e) {}
+    } else if (typeof ly.setIcon === 'function' && typeof ly.getLatLng === 'function') {
+      try { ly.setIcon(createPointDivIcon(sym)); } catch (e) {}
     }
   });
+  markProjectDirty(true);
 }
 
 function showSymEditor(id, liElement) {
   // remove existing editor if present
   const existing = document.getElementById('sym-editor-' + id);
   if (existing) { existing.remove(); return; }
-  const sym = layerSym[id] || { color: '#ff7800', fillColor: '#ff7800', radius: 6, weight: 2, fillOpacity: 0.7 };
+  const entry = layers.find((l) => l.id === id);
+  const geometryType = normalizeGeometryType(entry ? entry.geometryType : 'Point');
+  const sym = layerSym[id] || getDefaultSymbology(geometryType);
   const editor = document.createElement('div');
   editor.id = 'sym-editor-' + id;
   editor.className = 'sym-editor';
-  editor.innerHTML = `
-    <label>Color: <input type="color" id="sym-color-${id}" value="${sym.color}" /></label>
-    <label>Fill Color: <input type="color" id="sym-fill-${id}" value="${sym.fillColor||sym.color}" /></label>
-    <label>Radius: <input type="number" id="sym-radius-${id}" value="${sym.radius}" min="1" /></label>
-    <label>Weight: <input type="number" id="sym-weight-${id}" value="${sym.weight}" min="0"/></label>
-    <label>Fill opacity: <input type="range" id="sym-fillop-${id}" value="${sym.fillOpacity}" min="0" max="1" step="0.05"/></label>
-    <div style="display:flex;gap:8px;margin-top:8px"><button id="sym-apply-${id}">Apply</button><button id="sym-close-${id}">Close</button></div>
-  `;
+  let controls = '';
+  if (geometryType === 'Point') {
+    controls = `
+      <label>Marker: <select id="sym-marker-${id}">
+        <option value="circle">Circle</option>
+        <option value="square">Square</option>
+        <option value="diamond">Diamond</option>
+        <option value="triangle">Triangle</option>
+      </select></label>
+      <label>Size: <input type="number" id="sym-radius-${id}" value="${sym.radius}" min="2" /></label>
+      <label>Outline Color: <input type="color" id="sym-color-${id}" value="${sym.color}" /></label>
+      <label>Fill Color: <input type="color" id="sym-fill-${id}" value="${sym.fillColor || sym.color}" /></label>
+      <label>Outline Width: <input type="number" id="sym-weight-${id}" value="${sym.weight}" min="0" step="1"/></label>
+      <label>Opacity: <input type="range" id="sym-opacity-${id}" value="${sym.opacity}" min="0" max="1" step="0.05"/></label>
+      <label>Fill opacity: <input type="range" id="sym-fillop-${id}" value="${sym.fillOpacity}" min="0" max="1" step="0.05"/></label>
+    `;
+  } else if (geometryType === 'LineString') {
+    controls = `
+      <label>Line Color: <input type="color" id="sym-color-${id}" value="${sym.color}" /></label>
+      <label>Line Width: <input type="number" id="sym-weight-${id}" value="${sym.weight}" min="1" step="1"/></label>
+      <label>Line Style: <select id="sym-linestyle-${id}">
+        <option value="solid">Solid</option>
+        <option value="dashed">Dashed</option>
+        <option value="dotted">Dotted</option>
+      </select></label>
+      <label>Line opacity: <input type="range" id="sym-opacity-${id}" value="${sym.opacity}" min="0" max="1" step="0.05"/></label>
+    `;
+  } else {
+    controls = `
+      <label>Outline Color: <input type="color" id="sym-color-${id}" value="${sym.color}" /></label>
+      <label>Outline Width: <input type="number" id="sym-weight-${id}" value="${sym.weight}" min="1" step="1"/></label>
+      <label>Outline Style: <select id="sym-linestyle-${id}">
+        <option value="solid">Solid</option>
+        <option value="dashed">Dashed</option>
+        <option value="dotted">Dotted</option>
+      </select></label>
+      <label>Outline opacity: <input type="range" id="sym-opacity-${id}" value="${sym.opacity}" min="0" max="1" step="0.05"/></label>
+      <label>Fill Color: <input type="color" id="sym-fill-${id}" value="${sym.fillColor || sym.color}" /></label>
+      <label>Fill opacity: <input type="range" id="sym-fillop-${id}" value="${sym.fillOpacity}" min="0" max="1" step="0.05"/></label>
+    `;
+  }
+  editor.innerHTML = `${controls}<div style="display:flex;gap:8px;margin-top:8px"><button id="sym-apply-${id}">Apply</button><button id="sym-close-${id}">Close</button></div>`;
   liElement.appendChild(editor);
+  const markerSelect = document.getElementById(`sym-marker-${id}`);
+  if (markerSelect) markerSelect.value = sym.markerType || 'circle';
+  const lineStyleSelect = document.getElementById(`sym-linestyle-${id}`);
+  if (lineStyleSelect) lineStyleSelect.value = sym.lineStyle || 'solid';
+
   document.getElementById(`sym-apply-${id}`).addEventListener('click', () => {
-    const newSym = {
-      color: document.getElementById(`sym-color-${id}`).value,
-      fillColor: document.getElementById(`sym-fill-${id}`).value,
-      radius: Number(document.getElementById(`sym-radius-${id}`).value),
-      weight: Number(document.getElementById(`sym-weight-${id}`).value),
-      fillOpacity: Number(document.getElementById(`sym-fillop-${id}`).value),
-    };
+    const newSym = Object.assign({}, sym);
+    const colorInput = document.getElementById(`sym-color-${id}`);
+    const fillInput = document.getElementById(`sym-fill-${id}`);
+    const radiusInput = document.getElementById(`sym-radius-${id}`);
+    const weightInput = document.getElementById(`sym-weight-${id}`);
+    const fillOpacityInput = document.getElementById(`sym-fillop-${id}`);
+    const opacityInput = document.getElementById(`sym-opacity-${id}`);
+    const lineStyleInput = document.getElementById(`sym-linestyle-${id}`);
+    if (colorInput) newSym.color = colorInput.value;
+    if (fillInput) newSym.fillColor = fillInput.value;
+    if (radiusInput) newSym.radius = Number(radiusInput.value);
+    if (weightInput) newSym.weight = Number(weightInput.value);
+    if (fillOpacityInput) newSym.fillOpacity = Number(fillOpacityInput.value);
+    if (opacityInput) newSym.opacity = Number(opacityInput.value);
+    if (lineStyleInput) newSym.lineStyle = lineStyleInput.value;
+    if (markerSelect) newSym.markerType = markerSelect.value;
     layerSym[id] = newSym;
     // update swatch
     const sw = liElement.querySelector('.sym-swatch');
@@ -508,9 +813,11 @@ function toggleLayerVisibility(id, visible) {
   if (visible) {
     entry.layer.addTo(map);
     entry.visible = true;
+    renderLayerLabels(id);
   } else {
     map.removeLayer(entry.layer);
     entry.visible = false;
+    clearLayerLabelMarkers(id);
   }
 }
 
@@ -671,6 +978,36 @@ window.addEventListener('DOMContentLoaded', () => {
         hideModal('dialog-draworder');
       };
     }
+    const labelSettingsDialog = document.getElementById('dialog-label-settings');
+    if (labelSettingsDialog) {
+      document.getElementById('label-settings-ok').onclick = function() {
+        const targetLayerId = labelSettingsTargetLayerId;
+        const layerEntry = layers.find((l) => l.id === targetLayerId);
+        if (!targetLayerId || !layerEntry) {
+          hideModal('dialog-label-settings');
+          return;
+        }
+        const fieldSelect = document.getElementById('label-field-select');
+        const fontSizeInput = document.getElementById('label-font-size');
+        const colorInput = document.getElementById('label-font-color');
+        const placementSelect = document.getElementById('label-placement');
+        const fontSize = Number(fontSizeInput.value);
+        displayLayerLabels(
+          targetLayerId,
+          fieldSelect.value,
+          layerEntry.geojson,
+          {
+            fontSize: Number.isFinite(fontSize) ? Math.min(48, Math.max(8, fontSize)) : LABEL_STYLE_DEFAULTS.fontSize,
+            color: colorInput.value || LABEL_STYLE_DEFAULTS.color,
+            placement: placementSelect.value || LABEL_STYLE_DEFAULTS.placement
+          }
+        );
+        hideModal('dialog-label-settings');
+      };
+      document.getElementById('label-settings-cancel').onclick = function() {
+        hideModal('dialog-label-settings');
+      };
+    }
 
     // Add context menu for renaming/removing layers in TOC
     document.getElementById('layer-list').addEventListener('contextmenu', function(e) {
@@ -689,6 +1026,9 @@ window.addEventListener('DOMContentLoaded', () => {
         menu.id = 'layer-toc-context-menu';
         menu.className = 'context-menu';
         menu.innerHTML = `
+          <button id="toc-label-field">Set Label Field</button>
+          <button id="toc-toggle-labels"></button>
+          <button id="toc-clear-labels">Clear Labels</button>
           <button id="toc-rename">Rename Layer</button>
           <button id="toc-remove">Remove Layer</button>
         `;
@@ -703,6 +1043,37 @@ window.addEventListener('DOMContentLoaded', () => {
         showModal('dialog-rename-layer');
         menu.style.display = 'none';
       };
+      const layerEntry = layers.find((l) => l.id === layerId);
+      const labelState = layerLabels[layerId] || null;
+      const setFieldBtn = document.getElementById('toc-label-field');
+      const toggleLabelsBtn = document.getElementById('toc-toggle-labels');
+      const clearLabelsBtn = document.getElementById('toc-clear-labels');
+
+      setFieldBtn.onclick = function() {
+        menu.style.display = 'none';
+        openLabelSettingsDialog(layerId, layerEntry && layerEntry.geojson ? layerEntry.geojson : null);
+      };
+
+      if (labelState) {
+        const labelsEnabled = labelState.enabled !== false;
+        toggleLabelsBtn.textContent = labelsEnabled ? 'Labels OFF' : 'Labels ON';
+        toggleLabelsBtn.disabled = false;
+        toggleLabelsBtn.onclick = function() {
+          setLayerLabelEnabled(layerId, !labelsEnabled);
+          menu.style.display = 'none';
+        };
+        clearLabelsBtn.disabled = false;
+      } else {
+        toggleLabelsBtn.textContent = 'Labels OFF';
+        toggleLabelsBtn.disabled = true;
+        clearLabelsBtn.disabled = true;
+      }
+
+      clearLabelsBtn.onclick = function() {
+        removeLayerLabels(layerId);
+        menu.style.display = 'none';
+      };
+
       document.getElementById('toc-remove').onclick = function() {
         removeLayer(layerId);
         menu.style.display = 'none';
@@ -758,6 +1129,7 @@ window.addEventListener('DOMContentLoaded', () => {
       layers.forEach(l => { if (l.layer) l.layer.addTo(map); });
       // Re-render TOC
       renderLayerList();
+      markProjectDirty(true);
     }
 
     // Save/load layers (GeoJSON collection)
@@ -800,24 +1172,282 @@ window.addEventListener('DOMContentLoaded', () => {
       input.click();
     }
 
-    // Create empty layer
-    function createEmptyLayer(name, geomType, geojson) {
-      const id = 'layer-' + layerIdSeq++;
-      const newGeojson = geojson || { type: 'FeatureCollection', features: [] };
-      const leafletLayer = L.geoJSON(newGeojson).addTo(map);
-      const geometryType = normalizeGeometryType(geomType || inferGeometryTypeFromGeoJSON(newGeojson, 'Point'));
-      layers.push({ id, name, layer: leafletLayer, visible: true, geojson: newGeojson, geometryType });
-      if (!layerSym[id]) {
-        entrySetSymDefaults(id, { color: '#ff7800', fillColor: '#ff7800', radius: 6, weight: 2, fillOpacity: 0.7 });
-      }
-      activeLayerId = id;
+    function clearProjectWorkspace() {
+      stopEditMode();
+      clearSelection();
+      Object.keys(layerLabels).forEach((layerId) => removeLayerLabels(layerId));
+      layers.forEach((layerEntry) => {
+        if (layerEntry && layerEntry.layer) layerEntry.layer.remove();
+      });
+      layers = [];
+      activeLayerId = null;
+      lastGeoJSONLoaded = null;
+      currentGeoJsonLayer = null;
+      Object.keys(layerSym).forEach((key) => delete layerSym[key]);
+      dirtyLayerIds.clear();
+      layerIdSeq = 1;
+      projectDirty = false;
       renderLayerList();
+      const attributeTable = document.getElementById('attribute-table');
+      if (attributeTable) attributeTable.style.display = 'none';
+      updateProjectTitle();
+    }
+
+    function buildProjectState() {
+      const center = map ? map.getCenter() : null;
+      const mapState = center ? { center: [center.lat, center.lng], zoom: map.getZoom() } : null;
+      return {
+        type: 'NexaMapProject',
+        version: 1,
+        savedAt: new Date().toISOString(),
+        map: mapState,
+        activeLayerId,
+        layerIdSeq,
+        dirtyLayerIds: Array.from(dirtyLayerIds),
+        layers: layers.map((layerEntry) => ({
+          id: layerEntry.id,
+          name: layerEntry.name,
+          visible: layerEntry.visible !== false,
+          geometryType: layerEntry.geometryType,
+          sourcePath: layerEntry.sourcePath || null,
+          geojson: layerEntry.geojson,
+          symbology: layerSym[layerEntry.id] || getDefaultSymbology(layerEntry.geometryType || 'Point'),
+          labels: layerLabels[layerEntry.id]
+            ? {
+                columnName: layerLabels[layerEntry.id].columnName,
+                enabled: layerLabels[layerEntry.id].enabled !== false,
+                options: Object.assign({}, LABEL_STYLE_DEFAULTS, layerLabels[layerEntry.id].options || {}),
+              }
+            : null,
+        })),
+      };
+    }
+
+    function loadProjectState(projectData, sourcePath) {
+      if (!projectData || !Array.isArray(projectData.layers)) {
+        alert('Invalid project file.');
+        return false;
+      }
+      clearProjectWorkspace();
+
+      projectData.layers.forEach((layerDef) => {
+        const geojson = layerDef.geojson || { type: 'FeatureCollection', features: [] };
+        const created = createEmptyLayer(
+          layerDef.name || 'Layer',
+          layerDef.geometryType || inferGeometryTypeFromGeoJSON(geojson, 'Point'),
+          geojson,
+          {
+            layerId: layerDef.id,
+            visible: layerDef.visible !== false,
+            activate: false,
+            skipRender: true,
+            symbology: layerDef.symbology || null,
+            sourcePath: layerDef.sourcePath || null
+          }
+        );
+        if (!created) return;
+        if (layerDef.labels && layerDef.labels.columnName) {
+          layerLabels[created.id] = {
+            columnName: layerDef.labels.columnName,
+            geojson: created.geojson,
+            enabled: layerDef.labels.enabled !== false,
+            options: Object.assign({}, LABEL_STYLE_DEFAULTS, layerDef.labels.options || {}),
+          };
+        }
+      });
+
+      if (projectData.layerIdSeq && Number.isFinite(Number(projectData.layerIdSeq))) {
+        layerIdSeq = Math.max(layerIdSeq, Number(projectData.layerIdSeq));
+      }
+
+      const projectDirtyIds = new Set(Array.isArray(projectData.dirtyLayerIds) ? projectData.dirtyLayerIds : []);
+      dirtyLayerIds.clear();
+      layers.forEach((layerEntry) => {
+        if (projectDirtyIds.has(layerEntry.id)) dirtyLayerIds.add(layerEntry.id);
+      });
+
+      if (projectData.activeLayerId && layers.some((layerEntry) => layerEntry.id === projectData.activeLayerId)) {
+        activeLayerId = projectData.activeLayerId;
+      } else {
+        activeLayerId = layers.length > 0 ? layers[layers.length - 1].id : null;
+      }
+
+      renderLayerList();
+      layers.forEach((layerEntry) => renderLayerLabels(layerEntry.id));
+
+      if (projectData.map && Array.isArray(projectData.map.center) && projectData.map.center.length === 2) {
+        const lat = Number(projectData.map.center[0]);
+        const lng = Number(projectData.map.center[1]);
+        const zoom = Number(projectData.map.zoom);
+        if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(zoom)) {
+          map.setView([lat, lng], zoom);
+        }
+      }
+
+      const activeEntry = getActiveLayerEntry();
+      if (activeEntry) refreshAttributesForEntry(activeEntry);
+      currentProjectPath = sourcePath || null;
+      projectDirty = false;
+      updateProjectTitle();
+      return true;
+    }
+
+    function loadProjectFromContent(content, sourcePath) {
+      try {
+        const projectData = JSON.parse(content);
+        const ok = loadProjectState(projectData, sourcePath);
+        if (!ok) return false;
+        return true;
+      } catch (err) {
+        alert('Failed to load project: ' + err.message);
+        return false;
+      }
+    }
+
+    async function openProjectFromDialog() {
+      const proceed = await confirmSaveBeforeProjectClose();
+      if (!proceed) return;
+      const res = await window.electronAPI.openProject();
+      if (!res || res.canceled) return;
+      if (res.error) {
+        alert('Open project failed: ' + res.error);
+        return;
+      }
+      loadProjectFromContent(res.content, res.path);
+    }
+
+    async function saveProjectToFile() {
+      const projectData = buildProjectState();
+      const projectName = getFileBaseName(currentProjectPath || 'project');
+      const defaultName = `${projectName}.prj`;
+      const content = JSON.stringify(projectData, null, 2);
+      if (currentProjectPath) {
+        const writeRes = await window.electronAPI.writeProject(currentProjectPath, content);
+        if (!writeRes || !writeRes.ok) {
+          alert('Save project failed: ' + (writeRes && writeRes.error ? writeRes.error : 'Unknown error'));
+          return;
+        }
+        projectDirty = false;
+        updateProjectTitle();
+        return;
+      }
+
+      const res = await window.electronAPI.saveProject(defaultName, content, currentProjectPath || undefined);
+      if (!res || res.canceled) return;
+      if (res.error) {
+        alert('Save project failed: ' + res.error);
+        return;
+      }
+      currentProjectPath = res.path;
+      projectDirty = false;
+      updateProjectTitle();
+    }
+
+    async function saveProjectAsToFile() {
+      const projectData = buildProjectState();
+      const projectName = getFileBaseName(currentProjectPath || 'project');
+      const defaultName = `${projectName}.prj`;
+      const content = JSON.stringify(projectData, null, 2);
+      const res = await window.electronAPI.saveProject(defaultName, content, currentProjectPath || undefined);
+      if (!res || res.canceled) return;
+      if (res.error) {
+        alert('Save project failed: ' + res.error);
+        return;
+      }
+      currentProjectPath = res.path;
+      projectDirty = false;
+      updateProjectTitle();
+    }
+
+    async function saveAllLayerEdits() {
+      const dirtyIds = Array.from(dirtyLayerIds);
+      if (dirtyIds.length === 0) {
+        alert('No unsaved layer edits.');
+        return;
+      }
+      const failedLayers = [];
+      for (const layerId of dirtyIds) {
+        const ok = await saveLayerToFile(layerId, { allowPromptIfMissingSource: false });
+        if (!ok) {
+          const entry = layers.find((l) => l.id === layerId);
+          failedLayers.push(entry ? entry.name : layerId);
+        }
+      }
+      if (failedLayers.length > 0) {
+        alert('Could not save these layers because no source file is linked:\n' + failedLayers.join('\n'));
+        return;
+      }
+      alert('Layer edits saved.');
+    }
+
+    async function confirmSaveBeforeProjectClose() {
+      if (!projectDirty) return true;
+      const saveNow = confirm('Project has unsaved edits. Click OK to save before closing it.');
+      if (saveNow) {
+        await saveProjectToFile();
+        return !projectDirty;
+      }
+      const discard = confirm('Close project without saving changes?');
+      return !!discard;
+    }
+
+    async function closeCurrentProject() {
+      const proceed = await confirmSaveBeforeProjectClose();
+      if (!proceed) return;
+      clearProjectWorkspace();
+      currentProjectPath = null;
+      projectDirty = false;
+      map.setView([0, 0], 2);
+      updateProjectTitle();
+    }
+
+    async function createNewProject() {
+      const proceed = await confirmSaveBeforeProjectClose();
+      if (!proceed) return;
+      clearProjectWorkspace();
+      currentProjectPath = null;
+      projectDirty = false;
+      map.setView([0, 0], 2);
+      updateProjectTitle();
+    }
+
+    // Create empty layer
+    function createEmptyLayer(name, geomType, geojson, options = {}) {
+      const id = options.layerId || ('layer-' + layerIdSeq++);
+      const newGeojson = geojson || { type: 'FeatureCollection', features: [] };
+      const geometryType = normalizeGeometryType(geomType || inferGeometryTypeFromGeoJSON(newGeojson, 'Point'));
+      if (options.layerId) {
+        const seqMatch = /^layer-(\d+)$/.exec(options.layerId);
+        if (seqMatch) {
+          const parsedSeq = Number(seqMatch[1]);
+          if (Number.isFinite(parsedSeq)) layerIdSeq = Math.max(layerIdSeq, parsedSeq + 1);
+        }
+      }
+      if (!layerSym[id]) {
+        entrySetSymDefaults(id, options.symbology || getDefaultSymbology(geometryType));
+      }
+      const leafletLayer = createLeafletLayerForGeoJSON(newGeojson, id).addTo(map);
+      const visible = options.visible !== false;
+      if (!visible) leafletLayer.remove();
+      layers.push({
+        id,
+        name,
+        layer: leafletLayer,
+        visible,
+        geojson: newGeojson,
+        geometryType,
+        sourcePath: options.sourcePath || null
+      });
+      if (options.activate !== false) activeLayerId = id;
+      if (!options.skipRender) renderLayerList();
+      if (!options.skipRender) markProjectDirty(true);
+      return layers[layers.length - 1];
     }
 
     // Rename layer
     function renameLayer(layerId, newName) {
       const l = layers.find(l => l.id === layerId);
-      if (l) { l.name = newName; renderLayerList(); }
+      if (l) { l.name = newName; renderLayerList(); markProjectDirty(true); }
     }
 
     // Remove layer
@@ -826,10 +1456,12 @@ window.addEventListener('DOMContentLoaded', () => {
       if (idx !== -1) {
         if (activeLayerId === layerId) activeLayerId = null;
         dirtyLayerIds.delete(layerId);
+        removeLayerLabels(layerId);
         if (layers[idx].layer) layers[idx].layer.remove();
         layers.splice(idx, 1);
         if (!activeLayerId && layers.length > 0) activeLayerId = layers[layers.length - 1].id;
         renderLayerList();
+        markProjectDirty(true);
       }
     }
 
@@ -852,7 +1484,7 @@ window.addEventListener('DOMContentLoaded', () => {
         const sw = document.createElement('div');
         sw.className = 'sym-swatch';
         sw.dataset.layerId = l.id;
-        const sym = getLayerSymDefaults(l.id) || { color: '#ff7800', fillColor: '#ff7800', radius: 6, weight: 2, fillOpacity: 0.7 };
+        const sym = getLayerSymDefaults(l.id) || getDefaultSymbology(l.geometryType || 'Point');
         applySymToSwatch(sw, sym);
         sw.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -882,14 +1514,19 @@ window.addEventListener('DOMContentLoaded', () => {
       if (l) {
         l.visible = visible;
         if (l.layer) {
-          if (visible) l.layer.addTo(map);
-          else l.layer.remove();
+          if (visible) {
+            l.layer.addTo(map);
+            renderLayerLabels(layerId);
+          } else {
+            l.layer.remove();
+            clearLayerLabelMarkers(layerId);
+          }
         }
+        markProjectDirty(true);
       }
     }
   console.log('=== DOM LOADED ===');
   console.log('All buttons:', {
-    btnFile: document.getElementById('btn-file'),
     btnDuckdb: document.getElementById('btn-duckdb'),
     btnSnowflake: document.getElementById('btn-snowflake'),
     btnDatabricks: document.getElementById('btn-databricks'),
@@ -907,6 +1544,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
   createMap('EPSG:3857');
   console.log('Map created');
+  updateProjectTitle();
 
   // Wire up collapsible sections and panels
   document.querySelectorAll('.toggle-btn').forEach((btn) => {
@@ -950,7 +1588,7 @@ window.addEventListener('DOMContentLoaded', () => {
           lastGeoJSONSourceCRS = sourceCrs;
 
           const transformed = reprojectGeoJSON(parsed, sourceCrs, 'EPSG:3857');
-          addGeoJSONLayer(transformed, res.path.split(/[\\/]/).pop());
+          addGeoJSONLayer(transformed, getFileBaseName(res.path), { sourcePath: res.path });
         } catch (err) {
           alert('Failed to parse GeoJSON: ' + err.message);
         }
@@ -1005,6 +1643,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const btnAnalysis = document.getElementById('btn-analysis');
   const analysisDropdown = document.getElementById('analysis-dropdown');
   const btnPrint = document.getElementById('btn-print');
+  const dialogPrintSettings = document.getElementById('dialog-print-settings');
   const dialogBuffer = document.getElementById('dialog-buffer');
   const bufferDistanceInput = document.getElementById('buffer-distance');
   const bufferUnitsSelect = document.getElementById('buffer-units');
@@ -1063,6 +1702,7 @@ window.addEventListener('DOMContentLoaded', () => {
             case 'select-rect': return startSelectRectangle();
             case 'select-poly': return startSelectByPolygon();
             case 'select-line': return startSelectByLine();
+            case 'select-clear': return clearSelection();
             case 'nav-zoomin': return setNavigationMode('zoom-in');
             case 'nav-zoomout': return setNavigationMode('zoom-out');
             case 'nav-pan': return setNavigationMode('pan');
@@ -1070,6 +1710,9 @@ window.addEventListener('DOMContentLoaded', () => {
             case 'edit-add': return startEditAdd();
             case 'edit-modify': return startEditModify();
             case 'edit-delete': return startEditDelete();
+            case 'edit-save': return saveAllLayerEdits();
+            case 'edit-undo': return undoEditAction();
+            case 'edit-redo': return redoEditAction();
             case 'update-attributes': return openAttributeUpdater();
           }
         });
@@ -1077,12 +1720,58 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  if (window.electronAPI.onOpenProjectFromShell) {
+    window.electronAPI.onOpenProjectFromShell(async (payload) => {
+      if (!payload || !payload.path) return;
+      const res = await window.electronAPI.readProject(payload.path);
+      if (!res || res.canceled) {
+        if (res && res.error) alert('Open project failed: ' + res.error);
+        return;
+      }
+      loadProjectFromContent(res.content, res.path);
+    });
+  }
+
+  if (window.electronAPI.onMenuAction) {
+    window.electronAPI.onMenuAction(async (payload) => {
+      if (!payload || !payload.action) return;
+      const action = payload.action;
+      if (action === 'open-project') await openProjectFromDialog();
+      else if (action === 'save-project') await saveProjectToFile();
+      else if (action === 'save-project-as') await saveProjectAsToFile();
+      else if (action === 'close-project') await closeCurrentProject();
+      else if (action === 'create-project') await createNewProject();
+    });
+  }
+
   // Print button
   if (btnPrint) {
     btnPrint.addEventListener('click', () => {
-      console.log('Print map requested');
-      window.print();
+      if (!dialogPrintSettings) return;
+      showModal('dialog-print-settings');
     });
+  }
+
+  const printOkBtn = document.getElementById('print-settings-ok');
+  if (printOkBtn) {
+    printOkBtn.addEventListener('click', async () => {
+      const settings = {
+        title: (document.getElementById('print-title').value || 'Map Export').trim(),
+        pageSize: document.getElementById('print-page-size').value || 'A4',
+        orientation: document.getElementById('print-orientation').value || 'landscape',
+        includeLegend: !!document.getElementById('print-include-legend').checked,
+        includeNorthArrow: !!document.getElementById('print-include-north-arrow').checked,
+        includeScaleBar: !!document.getElementById('print-include-scale-bar').checked,
+        includeAttrTable: !!document.getElementById('print-include-attr-table').checked
+      };
+      hideModal('dialog-print-settings');
+      await renderAndSavePdf(settings);
+    });
+  }
+
+  const printCancelBtn = document.getElementById('print-settings-cancel');
+  if (printCancelBtn) {
+    printCancelBtn.addEventListener('click', () => hideModal('dialog-print-settings'));
   }
 
   function collectBufferSourceFeatures() {
@@ -1234,9 +1923,12 @@ window.addEventListener('DOMContentLoaded', () => {
   let activeSelectMode = null;
   let clickSelectHandler = null;
   let rectStart = null;
+  let rectSelecting = false;
   let rectSketch = null;
-  let rectClickHandler = null;
+  let rectDownHandler = null;
   let rectMoveHandler = null;
+  let rectUpHandler = null;
+  let rectDragRestoreEnabled = true;
   let sketchVertices = [];
   let sketchGuide = null;
   let sketchResult = null;
@@ -1356,11 +2048,18 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function stopRectangleSelect() {
-    if (rectClickHandler) map.off('click', rectClickHandler);
+    if (rectDownHandler) map.off('mousedown', rectDownHandler);
     if (rectMoveHandler) map.off('mousemove', rectMoveHandler);
-    rectClickHandler = null;
+    if (rectUpHandler) map.off('mouseup', rectUpHandler);
+    rectDownHandler = null;
     rectMoveHandler = null;
+    rectUpHandler = null;
+    rectSelecting = false;
     cleanupSketchLayers();
+    if (map && map.dragging) {
+      if (rectDragRestoreEnabled) map.dragging.enable();
+      else map.dragging.disable();
+    }
   }
 
   function stopPolygonSelect() {
@@ -1433,6 +2132,199 @@ window.addEventListener('DOMContentLoaded', () => {
     setSelection(matches);
   }
 
+  function featureIntersectsBounds(featureLayer, bounds) {
+    if (!featureLayer || !bounds) return false;
+    if (typeof featureLayer.getBounds === 'function') {
+      const b = featureLayer.getBounds();
+      return !!(b && b.isValid && b.isValid() && bounds.intersects(b));
+    }
+    if (typeof featureLayer.getLatLng === 'function') return bounds.contains(featureLayer.getLatLng());
+    return false;
+  }
+
+  function createPrintableLayer(geojson, sym, mapInstance) {
+    return L.geoJSON(geojson, {
+      pointToLayer: (feature, latlng) => {
+        if (sym.markerType && sym.markerType !== 'circle') {
+          return L.marker(latlng, { icon: createPointDivIcon(sym) });
+        }
+        return L.circleMarker(latlng, {
+          radius: sym.radius,
+          color: sym.color,
+          fillColor: sym.fillColor,
+          weight: sym.weight,
+          fillOpacity: sym.fillOpacity,
+          opacity: sym.opacity
+        });
+      },
+      style: () => ({
+        color: sym.color,
+        weight: sym.weight,
+        fillColor: sym.fillColor,
+        fillOpacity: sym.fillOpacity,
+        opacity: sym.opacity,
+        dashArray: getDashArrayForLineStyle(sym.lineStyle)
+      }),
+    }).addTo(mapInstance);
+  }
+
+  function collectPrintAttributeRows(bounds) {
+    const rows = [];
+    getFeatureLayers(false).forEach((featureLayer) => {
+      if (!featureIntersectsBounds(featureLayer, bounds)) return;
+      const owner = getFeatureOwnerEntry(featureLayer);
+      const props = featureLayer.feature && featureLayer.feature.properties ? featureLayer.feature.properties : {};
+      rows.push({
+        layer: owner ? owner.name : 'Layer',
+        geometry: featureLayer.feature && featureLayer.feature.geometry ? featureLayer.feature.geometry.type : '',
+        properties: props
+      });
+    });
+    return rows;
+  }
+
+  async function renderAndSavePdf(settings) {
+    const layout = document.createElement('div');
+    layout.id = 'pdf-print-layout';
+    layout.innerHTML = `
+      <div class="print-sheet">
+        <div class="print-header">${escapeHtml(settings.title || 'Map Export')}</div>
+        <div class="print-body">
+          <div class="print-map-wrap">
+            <div id="pdf-print-map"></div>
+          </div>
+          <aside class="print-side" id="pdf-print-side"></aside>
+        </div>
+      </div>
+      <div class="print-attrs-pages" id="pdf-print-attrs-pages"></div>
+    `;
+    document.body.appendChild(layout);
+
+    const printMapEl = document.getElementById('pdf-print-map');
+    const sideEl = document.getElementById('pdf-print-side');
+    const attrsPagesEl = document.getElementById('pdf-print-attrs-pages');
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    const bounds = map.getBounds();
+    const printMap = L.map(printMapEl, { zoomControl: false, attributionControl: false });
+    printMap.setView(center, zoom);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    }).addTo(printMap);
+
+    layers
+      .filter((layerEntry) => layerEntry.visible !== false)
+      .forEach((layerEntry) => {
+        const sym = getLayerSymDefaults(layerEntry.id) || getDefaultSymbology(layerEntry.geometryType || 'Point');
+        createPrintableLayer(layerEntry.geojson, sym, printMap);
+      });
+
+    if (settings.includeScaleBar) {
+      L.control.scale({ imperial: true, metric: true }).addTo(printMap);
+    }
+
+    if (settings.includeNorthArrow) {
+      const north = document.createElement('div');
+      north.className = 'print-north';
+      north.textContent = 'N ↑';
+      printMapEl.parentElement.appendChild(north);
+    }
+
+    if (settings.includeLegend) {
+      const legendTitle = document.createElement('h4');
+      legendTitle.textContent = 'Legend';
+      legendTitle.style.margin = '0 0 8px';
+      sideEl.appendChild(legendTitle);
+      layers.filter((layerEntry) => layerEntry.visible !== false).forEach((layerEntry) => {
+        const sym = getLayerSymDefaults(layerEntry.id) || getDefaultSymbology(layerEntry.geometryType || 'Point');
+        const row = document.createElement('div');
+        row.className = 'print-legend-item';
+        const sw = document.createElement('span');
+        sw.className = 'print-legend-swatch';
+        sw.style.background = sym.fillColor || sym.color || '#888';
+        sw.style.borderColor = sym.color || '#666';
+        row.appendChild(sw);
+        const txt = document.createElement('span');
+        txt.textContent = layerEntry.name;
+        row.appendChild(txt);
+        sideEl.appendChild(row);
+      });
+    }
+
+    if (settings.includeAttrTable) {
+      const rows = collectPrintAttributeRows(bounds);
+      const columns = new Set(['Layer', 'Geometry']);
+      rows.forEach((row) => {
+        Object.keys(row.properties || {}).forEach((k) => columns.add(k));
+      });
+      const colList = Array.from(columns);
+
+      attrsPagesEl.innerHTML = '';
+      const pageTitle = document.createElement('h3');
+      pageTitle.className = 'print-page-break';
+      pageTitle.textContent = 'Attributes (Current Extent)';
+      pageTitle.style.margin = '0 0 8px';
+      attrsPagesEl.appendChild(pageTitle);
+
+      const countInfo = document.createElement('div');
+      countInfo.style.fontSize = '12px';
+      countInfo.style.color = '#334e68';
+      countInfo.textContent = `Total features in extent: ${rows.length}`;
+      attrsPagesEl.appendChild(countInfo);
+
+      const table = document.createElement('table');
+      table.className = 'print-attr-table';
+      const thead = document.createElement('thead');
+      const trh = document.createElement('tr');
+      colList.forEach((c) => {
+        const th = document.createElement('th');
+        th.textContent = c;
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        colList.forEach((c) => {
+          const td = document.createElement('td');
+          if (c === 'Layer') td.textContent = row.layer;
+          else if (c === 'Geometry') td.textContent = row.geometry;
+          else {
+            const v = row.properties ? row.properties[c] : '';
+            td.textContent = typeof v === 'undefined' || v === null ? '' : String(v);
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      attrsPagesEl.appendChild(table);
+    } else {
+      attrsPagesEl.remove();
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    const pdfRes = await window.electronAPI.saveCurrentWindowPdf({
+      defaultName: `${(settings.title || 'map-export').replace(/[\\/:*?"<>|]+/g, '_')}.pdf`,
+      orientation: settings.orientation,
+      pageSize: settings.pageSize
+    });
+
+    printMap.remove();
+    layout.remove();
+
+    if (pdfRes && pdfRes.error) {
+      alert('PDF export failed: ' + pdfRes.error);
+      return;
+    }
+    if (pdfRes && !pdfRes.canceled) {
+      alert('PDF saved: ' + pdfRes.path);
+    }
+  }
+
   function selectByPolygon(polygonLatLngs) {
     const polygonBounds = L.latLngBounds(polygonLatLngs);
     const matches = getFeatureLayers(false).filter((featureLayer) => {
@@ -1481,23 +2373,44 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function startSelectRectangle() {
     setSelectMode('rectangle');
-    rectClickHandler = (e) => {
-      if (!rectStart) {
-        rectStart = e.latlng;
-        rectSketch = L.rectangle(L.latLngBounds(rectStart, rectStart), SKETCH_STYLE).addTo(map);
-        return;
+    rectDragRestoreEnabled = !!(map && map.dragging && map.dragging.enabled && map.dragging.enabled());
+    if (map && map.dragging) map.dragging.disable();
+
+    rectDownHandler = (e) => {
+      if (activeSelectMode !== 'rectangle') return;
+      if (e.originalEvent && e.originalEvent.button !== 0) return;
+      rectStart = e.latlng;
+      rectSelecting = true;
+      if (rectSketch && map.hasLayer(rectSketch)) map.removeLayer(rectSketch);
+      rectSketch = L.rectangle(L.latLngBounds(rectStart, rectStart), SKETCH_STYLE).addTo(map);
+      if (e.originalEvent) {
+        e.originalEvent.preventDefault();
+        e.originalEvent.stopPropagation();
       }
+    };
+
+    rectMoveHandler = (e) => {
+      if (!rectSelecting || !rectStart || !rectSketch) return;
+      rectSketch.setBounds(L.latLngBounds(rectStart, e.latlng));
+    };
+
+    rectUpHandler = (e) => {
+      if (!rectSelecting || !rectStart) return;
       const bounds = L.latLngBounds(rectStart, e.latlng);
       selectByBounds(bounds);
+      rectSelecting = false;
       rectStart = null;
       if (rectSketch && map.hasLayer(rectSketch)) map.removeLayer(rectSketch);
       rectSketch = null;
+      if (e.originalEvent) {
+        e.originalEvent.preventDefault();
+        e.originalEvent.stopPropagation();
+      }
     };
-    rectMoveHandler = (e) => {
-      if (rectStart && rectSketch) rectSketch.setBounds(L.latLngBounds(rectStart, e.latlng));
-    };
-    map.on('click', rectClickHandler);
+
+    map.on('mousedown', rectDownHandler);
     map.on('mousemove', rectMoveHandler);
+    map.on('mouseup', rectUpHandler);
     console.log('Select mode: rectangle');
   }
 
@@ -1609,6 +2522,154 @@ window.addEventListener('DOMContentLoaded', () => {
   let modifyMapClickHandler = null;
   let deleteFeatureClickHandler = null;
   let pendingModifyFeatureLayer = null;
+  const editUndoStack = [];
+  const editRedoStack = [];
+  const MAX_EDIT_HISTORY = 100;
+
+  function cloneGeoJSON(obj) {
+    return JSON.parse(JSON.stringify(obj || { type: 'FeatureCollection', features: [] }));
+  }
+
+  function rebuildLayerFromGeoJSON(layerId) {
+    const entry = layers.find((l) => l.id === layerId);
+    if (!entry) return false;
+    const isVisible = entry.visible !== false && map.hasLayer(entry.layer);
+    if (entry.layer) entry.layer.remove();
+    entry.layer = createLeafletLayerForGeoJSON(entry.geojson, entry.id);
+    if (isVisible) entry.layer.addTo(map);
+    if (activeLayerId === entry.id) currentGeoJsonLayer = entry.layer;
+    refreshAttributesForEntry(entry);
+    renderLayerLabels(entry.id);
+    return true;
+  }
+
+  function pushUndoSnapshot(layerId, geojsonSnapshot) {
+    if (!layerId || !geojsonSnapshot) return;
+    editUndoStack.push({ layerId, geojson: cloneGeoJSON(geojsonSnapshot) });
+    if (editUndoStack.length > MAX_EDIT_HISTORY) editUndoStack.shift();
+    editRedoStack.length = 0;
+  }
+
+  function undoEditAction() {
+    if (editUndoStack.length === 0) {
+      alert('Nothing to undo.');
+      return;
+    }
+    stopEditMode();
+    clearSelection();
+    const item = editUndoStack.pop();
+    const entry = layers.find((l) => l.id === item.layerId);
+    if (!entry) return;
+    editRedoStack.push({ layerId: item.layerId, geojson: cloneGeoJSON(entry.geojson) });
+    entry.geojson = cloneGeoJSON(item.geojson);
+    rebuildLayerFromGeoJSON(item.layerId);
+    markLayerDirty(item.layerId, true);
+    markProjectDirty(true);
+  }
+
+  function redoEditAction() {
+    if (editRedoStack.length === 0) {
+      alert('Nothing to redo.');
+      return;
+    }
+    stopEditMode();
+    clearSelection();
+    const item = editRedoStack.pop();
+    const entry = layers.find((l) => l.id === item.layerId);
+    if (!entry) return;
+    editUndoStack.push({ layerId: item.layerId, geojson: cloneGeoJSON(entry.geojson) });
+    entry.geojson = cloneGeoJSON(item.geojson);
+    rebuildLayerFromGeoJSON(item.layerId);
+    markLayerDirty(item.layerId, true);
+    markProjectDirty(true);
+  }
+
+  function getEntryAttributeKeys(entry) {
+    if (!entry || !entry.geojson || !Array.isArray(entry.geojson.features)) return [];
+    const keys = new Set();
+    entry.geojson.features.forEach((feature) => {
+      const props = feature && feature.properties ? feature.properties : {};
+      Object.keys(props).forEach((key) => {
+        if (key !== 'id' && key !== 'created_at') keys.add(key);
+      });
+    });
+    return Array.from(keys);
+  }
+
+  function parseAttributeValue(raw) {
+    const value = String(raw || '').trim();
+    if (value === '') return undefined;
+    try {
+      return JSON.parse(value);
+    } catch (err) {
+      return value;
+    }
+  }
+
+  function promptFeatureAttributes(entry) {
+    return new Promise((resolve) => {
+      const container = document.getElementById('add-feature-attrs-container');
+      const extraJson = document.getElementById('add-feature-attrs-json');
+      const okBtn = document.getElementById('add-feature-attrs-ok');
+      const cancelBtn = document.getElementById('add-feature-attrs-cancel');
+      if (!container || !extraJson || !okBtn || !cancelBtn) {
+        resolve({});
+        return;
+      }
+
+      const keys = getEntryAttributeKeys(entry);
+      container.innerHTML = '';
+      const effectiveKeys = keys.length > 0 ? keys : ['name'];
+      effectiveKeys.forEach((key) => {
+        const row = document.createElement('div');
+        row.style.marginBottom = '8px';
+        row.innerHTML = `<label>${key}:</label><input data-attr-key="${key}" placeholder="${key}" />`;
+        container.appendChild(row);
+      });
+      extraJson.value = '';
+
+      const cleanup = () => {
+        okBtn.onclick = null;
+        cancelBtn.onclick = null;
+      };
+
+      okBtn.onclick = () => {
+        const attrs = {};
+        container.querySelectorAll('input[data-attr-key]').forEach((input) => {
+          const key = input.dataset.attrKey;
+          const parsed = parseAttributeValue(input.value);
+          if (typeof parsed !== 'undefined') attrs[key] = parsed;
+        });
+
+        const extraRaw = String(extraJson.value || '').trim();
+        if (extraRaw) {
+          try {
+            const parsedExtra = JSON.parse(extraRaw);
+            if (parsedExtra && typeof parsedExtra === 'object' && !Array.isArray(parsedExtra)) {
+              Object.assign(attrs, parsedExtra);
+            } else {
+              alert('Extra attributes must be a JSON object.');
+              return;
+            }
+          } catch (err) {
+            alert('Invalid JSON in extra attributes: ' + err.message);
+            return;
+          }
+        }
+        cleanup();
+        hideModal('dialog-add-feature-attrs');
+        resolve(attrs);
+      };
+
+      cancelBtn.onclick = () => {
+        cleanup();
+        hideModal('dialog-add-feature-attrs');
+        resolve(null);
+      };
+
+      showModal('dialog-add-feature-attrs');
+    });
+  }
 
   function getEditableLayerEntry() {
     if (layers.length === 0) return null;
@@ -1705,23 +2766,31 @@ window.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
-  function addFeatureToEntry(entry, geometry) {
-    if (!entry || !geometry) return;
+  async function addFeatureToEntry(entry, geometry) {
+    if (!entry || !geometry) return false;
     if (!entry.geojson || !Array.isArray(entry.geojson.features)) {
       entry.geojson = { type: 'FeatureCollection', features: [] };
     }
+    const beforeSnapshot = cloneGeoJSON(entry.geojson);
+    const attrs = await promptFeatureAttributes(entry);
+    if (attrs === null) return false;
     const newFeature = {
       type: 'Feature',
       properties: {
+        ...(attrs || {}),
         id: Date.now(),
         created_at: new Date().toISOString(),
       },
       geometry,
     };
+    pushUndoSnapshot(entry.id, beforeSnapshot);
     entry.geojson.features.push(newFeature);
     entry.layer.addData(newFeature);
     markLayerDirty(entry.id, true);
+    markProjectDirty(true);
     refreshAttributesForEntry(entry);
+    if (currentProjectPath) await saveProjectToFile();
+    return true;
   }
 
   function resetAddSketch() {
@@ -1743,22 +2812,18 @@ window.addEventListener('DOMContentLoaded', () => {
     activeEditMode = 'add';
     document.getElementById('map').style.cursor = 'copy';
 
-    if (geomType !== 'Point') {
-      alert(`Add mode for ${geomType}: left-click to add vertices, right-click or double-click to finish.`);
-    }
-
-    addMapClickHandler = (e) => {
+    addMapClickHandler = async (e) => {
       if (activeEditMode !== 'add') return;
       const activeEntry = getEditableLayerEntry();
       if (!activeEntry) return;
       const activeGeomType = getLayerGeometryType(activeEntry);
 
       if (activeGeomType === 'Point') {
-        addFeatureToEntry(activeEntry, {
+        const added = await addFeatureToEntry(activeEntry, {
           type: 'Point',
           coordinates: [e.latlng.lng, e.latlng.lat],
         });
-        console.log('Edit mode add: point feature added');
+        if (added) console.log('Edit mode add: point feature added');
         return;
       }
 
@@ -1776,7 +2841,7 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     };
 
-    const finishSketchForActiveLayer = () => {
+    const finishSketchForActiveLayer = async () => {
       const activeEntry = getEditableLayerEntry();
       if (!activeEntry) return;
       const activeGeomType = getLayerGeometryType(activeEntry);
@@ -1787,21 +2852,21 @@ window.addEventListener('DOMContentLoaded', () => {
         alert(activeGeomType === 'Polygon' ? 'Polygon needs at least 3 vertices.' : 'LineString needs at least 2 vertices.');
         return;
       }
-      addFeatureToEntry(activeEntry, geometry);
-      console.log(`Edit mode add: ${activeGeomType} feature added`);
+      const added = await addFeatureToEntry(activeEntry, geometry);
+      if (added) console.log(`Edit mode add: ${activeGeomType} feature added`);
       resetAddSketch();
     };
 
-    addMapDoubleClickHandler = (e) => {
+    addMapDoubleClickHandler = async (e) => {
       if (activeEditMode !== 'add') return;
       L.DomEvent.stop(e);
-      finishSketchForActiveLayer();
+      await finishSketchForActiveLayer();
     };
 
-    addMapContextMenuHandler = (e) => {
+    addMapContextMenuHandler = async (e) => {
       if (activeEditMode !== 'add') return;
       L.DomEvent.stop(e);
-      finishSketchForActiveLayer();
+      await finishSketchForActiveLayer();
     };
 
     map.on('click', addMapClickHandler);
@@ -1841,6 +2906,7 @@ window.addEventListener('DOMContentLoaded', () => {
       if (!entry) return;
       const idx = getFeatureIndex(entry, pendingModifyFeatureLayer);
       if (idx < 0) return;
+      const beforeSnapshot = cloneGeoJSON(entry.geojson);
 
       const feature = entry.geojson.features[idx];
       if (!feature || !feature.geometry || feature.geometry.type !== 'Point') {
@@ -1849,11 +2915,13 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      pushUndoSnapshot(entry.id, beforeSnapshot);
       feature.geometry.coordinates = [e.latlng.lng, e.latlng.lat];
       if (typeof pendingModifyFeatureLayer.setLatLng === 'function') {
         pendingModifyFeatureLayer.setLatLng(e.latlng);
       }
       markLayerDirty(entry.id, true);
+      markProjectDirty(true);
       refreshAttributesForEntry(entry);
       pendingModifyFeatureLayer = null;
       console.log('Edit mode modify: feature moved');
@@ -1885,10 +2953,13 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       const idx = getFeatureIndex(entry, featureLayer);
       if (idx < 0) return;
+      const beforeSnapshot = cloneGeoJSON(entry.geojson);
 
+      pushUndoSnapshot(entry.id, beforeSnapshot);
       entry.geojson.features.splice(idx, 1);
       entry.layer.removeLayer(featureLayer);
       markLayerDirty(entry.id, true);
+      markProjectDirty(true);
       if (selectedFeatureSet.has(featureLayer)) {
         selectedFeatureSet.delete(featureLayer);
         updateSelectedFeaturesWindow();
@@ -1931,6 +3002,10 @@ window.addEventListener('DOMContentLoaded', () => {
       const res = await electronAPI.openGeoJSON();
       if (res && res.path && res.content) {
         document.getElementById('dialog-file-path').value = res.path;
+        const preferredNameInput = document.getElementById('dialog-file-layer-name');
+        if (preferredNameInput && !preferredNameInput.value.trim()) {
+          preferredNameInput.value = getFileBaseName(res.path);
+        }
         selectedFileContent = res.content; // Store the content
       }
     });
@@ -1955,6 +3030,8 @@ window.addEventListener('DOMContentLoaded', () => {
       
       try {
         const parsed = JSON.parse(selectedFileContent);
+        const preferredName = (document.getElementById('dialog-file-layer-name').value || '').trim();
+        const finalLayerName = preferredName || getFileBaseName(filePath);
         
         // Log original coordinates for debugging
         if (parsed.features && parsed.features.length > 0) {
@@ -1978,7 +3055,7 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         }
         
-        addGeoJSONLayer(transformed, filePath.split(/[\\/]/).pop());
+        addGeoJSONLayer(transformed, finalLayerName, { sourcePath: filePath });
         
         // Log for debugging
         console.log('File loaded:', { filePath, crs: selectedCRS, swapCoords, numFeatures: parsed.features?.length || 0 });
@@ -1986,6 +3063,7 @@ window.addEventListener('DOMContentLoaded', () => {
         // Reset for next use
         selectedFileContent = null;
         document.getElementById('dialog-file-path').value = '';
+        document.getElementById('dialog-file-layer-name').value = '';
         document.getElementById('dialog-file-swap-coords').checked = false;
       } catch (err) {
         alert('Failed to load file: ' + err.message);
@@ -1998,7 +3076,9 @@ window.addEventListener('DOMContentLoaded', () => {
   if (fileCancelBtn) {
     fileCancelBtn.addEventListener('click', () => {
       hideModal('dialog-file');
+      selectedFileContent = null;
       document.getElementById('dialog-file-path').value = '';
+      document.getElementById('dialog-file-layer-name').value = '';
       document.getElementById('dialog-file-crs').value = 'EPSG:4326';
     });
   }
