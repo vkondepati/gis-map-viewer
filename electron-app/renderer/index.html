@@ -11,7 +11,9 @@
     <div id="app">
       <header id="toolbar">
         <div id="toolbar-left">
-          <h1 style="margin:0;font-size:24px;font-weight:bold;color:#fff;letter-spacing:1px">NexaMap</h1>
+          <h1 style="margin:0;font-size:24px;font-weight:bold;color:#fff;letter-spacing:1px">
+            NexaMap <span id="project-title-name" style="font-size:14px;font-weight:400;color:#99c2dd;"></span>
+          </h1>
         </div>
         <div id="toolbar-buttons">
           <!-- Connect -->
@@ -45,6 +47,7 @@
               <button class="dropdown-item" data-tool="select-rect">Rectangle</button>
               <button class="dropdown-item" data-tool="select-poly">By Polygon</button>
               <button class="dropdown-item" data-tool="select-line">By Line</button>
+              <button class="dropdown-item" data-tool="select-clear">Clear Selection</button>
             </div>
           </div>
 
@@ -55,6 +58,9 @@
               <button class="dropdown-item" data-tool="edit-add">Add Feature</button>
               <button class="dropdown-item" data-tool="edit-modify">Modify Feature</button>
               <button class="dropdown-item" data-tool="edit-delete">Delete Feature</button>
+              <button class="dropdown-item" data-tool="edit-save">Save Edits</button>
+              <button class="dropdown-item" data-tool="edit-undo">Undo</button>
+              <button class="dropdown-item" data-tool="edit-redo">Redo</button>
               <button class="dropdown-item" data-tool="update-attributes">Update Attributes</button>
             </div>
           </div>
@@ -79,7 +85,7 @@
               <span class="dropdown-group-title">Layer Operations</span>
               <button class="dropdown-item" data-layer-action="draworder">Set Draw Order</button>
             </div>
-          </div>
+          </div>
           <button class="toolbar-btn" id="btn-print" title="Print Map">🖨️ Print</button>
         </div>
       </header>
@@ -160,6 +166,43 @@
         </div>
       </div>
 
+      <div id="dialog-label-settings" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Label Settings</h3>
+          <label>Field:</label>
+          <select id="label-field-select"></select>
+          <label>Font Size (px):</label>
+          <input id="label-font-size" type="number" min="8" max="48" step="1" value="12" />
+          <label>Font Color:</label>
+          <input id="label-font-color" type="color" value="#111111" />
+          <label>Placement:</label>
+          <select id="label-placement">
+            <option value="center">Center</option>
+            <option value="above">Above</option>
+            <option value="below">Below</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+          </select>
+          <div style="margin-top:20px;">
+            <button id="label-settings-ok">Apply</button>
+            <button id="label-settings-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-add-feature-attrs" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Feature Attributes</h3>
+          <div id="add-feature-attrs-container"></div>
+          <label>Extra Attributes (JSON object, optional):</label>
+          <textarea id="add-feature-attrs-json" style="width:100%;min-height:80px;box-sizing:border-box;" placeholder='{"key":"value"}'></textarea>
+          <div style="margin-top:20px;">
+            <button id="add-feature-attrs-ok">Save Feature</button>
+            <button id="add-feature-attrs-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
       <div id="dialog-buffer" class="connection-dialog modal-hidden">
         <div class="dialog-content">
           <h3>Buffer Analysis</h3>
@@ -178,6 +221,43 @@
           </div>
         </div>
       </div>
+      <div id="dialog-print-settings" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Print / PDF Settings</h3>
+          <label>Map Title:</label>
+          <input id="print-title" placeholder="Map export" value="Map Export" />
+          <label>Paper Size:</label>
+          <select id="print-page-size">
+            <option value="A4">A4</option>
+            <option value="Letter">Letter</option>
+          </select>
+          <label>Orientation:</label>
+          <select id="print-orientation">
+            <option value="landscape">Landscape</option>
+            <option value="portrait">Portrait</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+            <input id="print-include-legend" type="checkbox" style="width:auto;" checked />
+            Include Legend
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+            <input id="print-include-north-arrow" type="checkbox" style="width:auto;" checked />
+            Include North Arrow
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+            <input id="print-include-scale-bar" type="checkbox" style="width:auto;" checked />
+            Include Scale Bar
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+            <input id="print-include-attr-table" type="checkbox" style="width:auto;" />
+            Include Attribute Table (Current Extent)
+          </label>
+          <div style="margin-top:20px;">
+            <button id="print-settings-ok">Generate PDF</button>
+            <button id="print-settings-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Connection Dialogs -->
       <div id="modal-overlay" class="modal-overlay"></div>
@@ -186,6 +266,8 @@
           <h3>Open GeoJSON File</h3>
           <input id="dialog-file-path" placeholder="File path (optional)" style="width:100%;margin:10px 0;" />
           <button id="dialog-file-browse">Browse...</button>
+          <label style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Preferred Layer Name (optional):</label>
+          <input id="dialog-file-layer-name" placeholder="If blank, file name will be used" style="width:100%;margin:10px 0;" />
           <label style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Source Coordinate System:</label>
           <select id="dialog-file-crs" style="width:100%;margin:10px 0;">
             <option value="EPSG:3857">EPSG:3857 (Web Mercator - Default)</option>
@@ -279,3 +361,12 @@
     <script src="renderer.js"></script>
   </body>
 </html>
+
+
+
+
+
+
+
+
+

@@ -23,13 +23,9 @@ A comprehensive, open-source desktop application for viewing, analyzing, and edi
 
 ### Installation
 
-Download the latest release for your platform:
+For source install and local build steps, see [INSTALLATION.md](docs/INSTALLATION.md).
 
-- **Windows**: [gis-map-viewer-setup.exe](https://github.com/yourusername/gis-map-viewer/releases)
-- **macOS**: [gis-map-viewer.dmg](https://github.com/yourusername/gis-map-viewer/releases)
-- **Linux**: [gis-map-viewer.AppImage](https://github.com/yourusername/gis-map-viewer/releases)
-
-Or install from source: See [INSTALLATION.md](docs/INSTALLATION.md)
+For CI/CD release builds and deployment artifacts, see [RELEASE_PIPELINE.md](docs/RELEASE_PIPELINE.md).
 
 ### Basic Usage
 
@@ -52,7 +48,7 @@ For detailed instructions, see [USAGE.md](docs/USAGE.md)
 | [API.md](docs/API.md)                         | Developer API reference       |
 | [CONFIGURATION.md](docs/CONFIGURATION.md)     | Configuration and preferences |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues and solutions   |
-| [DEVELOPMENT.md](docs/DEVELOPMENT.md)         | Development setup guide       |
+| [RELEASE_PIPELINE.md](docs/RELEASE_PIPELINE.md) | Build and release pipeline  |
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md)       | How to contribute             |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md)       | System architecture           |
 | [ROADMAP.md](docs/ROADMAP.md)                 | Project roadmap               |
