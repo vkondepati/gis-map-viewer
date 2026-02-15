@@ -198,6 +198,24 @@ ipcMain.handle('dialog:saveFile', async (event, { defaultName, content }) => {
   }
 });
 
+ipcMain.handle('dialog:saveTextFile', async (event, { defaultName, content }) => {
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    defaultPath: defaultName || 'export.csv',
+    filters: [
+      { name: 'CSV', extensions: ['csv'] },
+      { name: 'Text', extensions: ['txt'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (canceled || !filePath) return { canceled: true };
+  try {
+    fs.writeFileSync(filePath, content, 'utf8');
+    return { canceled: false, path: filePath };
+  } catch (err) {
+    return { canceled: true, error: err.message };
+  }
+});
+
 ipcMain.handle('dialog:writeFile', async (event, { filePath, content }) => {
   if (!filePath) return { ok: false, error: 'Missing file path' };
   try {
@@ -222,6 +240,139 @@ ipcMain.handle('dialog:openProjectFile', async () => {
     return { canceled: false, path: filePaths[0], content };
   } catch (err) {
     return { canceled: true, error: err.message };
+  }
+});
+
+ipcMain.handle('dialog:pickFolder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+  });
+  if (canceled || !filePaths || filePaths.length === 0) return { canceled: true };
+  return { canceled: false, path: filePaths[0] };
+});
+
+ipcMain.handle('fs:listDirectory', async (event, { folderPath }) => {
+  if (!folderPath) return { ok: false, error: 'Missing folder path' };
+  try {
+    const dirents = fs.readdirSync(folderPath, { withFileTypes: true });
+    const entries = dirents
+      .map((d) => ({
+        name: d.name,
+        path: path.join(folderPath, d.name),
+        kind: d.isDirectory() ? 'folder' : 'file',
+      }))
+      .sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+    return { ok: true, entries };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+function sanitizeBaseName(input, fallback = 'new_item') {
+  const raw = String(input || '').trim();
+  const safe = raw.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ');
+  return safe || fallback;
+}
+
+ipcMain.handle('fs:createFolder', async (event, { folderPath, name }) => {
+  if (!folderPath) return { ok: false, error: 'Missing folder path' };
+  try {
+    const finalName = sanitizeBaseName(name, 'new_folder');
+    const full = path.join(folderPath, finalName);
+    if (fs.existsSync(full)) return { ok: false, error: 'Folder already exists' };
+    fs.mkdirSync(full, { recursive: true });
+    return { ok: true, path: full };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('fs:createGeoJSONFile', async (event, { folderPath, name, columns, targetCrs }) => {
+  if (!folderPath) return { ok: false, error: 'Missing folder path' };
+  try {
+    const base = sanitizeBaseName(name, 'new_layer');
+    const filename = base.toLowerCase().endsWith('.geojson') ? base : `${base}.geojson`;
+    const full = path.join(folderPath, filename);
+    if (fs.existsSync(full)) return { ok: false, error: 'File already exists' };
+    const sanitizedColumns = Array.isArray(columns)
+      ? columns.map((c) => String(c || '').trim()).filter((c) => c.length > 0)
+      : [];
+    const content = JSON.stringify({
+      type: 'FeatureCollection',
+      crs: { type: 'name', properties: { name: targetCrs || 'EPSG:4326' } },
+      schema: { columns: sanitizedColumns },
+      features: [],
+    }, null, 2);
+    fs.writeFileSync(full, content, 'utf8');
+    return { ok: true, path: full };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('fs:createKMLFile', async (event, { folderPath, name, columns, targetCrs }) => {
+  if (!folderPath) return { ok: false, error: 'Missing folder path' };
+  try {
+    const base = sanitizeBaseName(name, 'new_layer');
+    const filename = base.toLowerCase().endsWith('.kml') ? base : `${base}.kml`;
+    const full = path.join(folderPath, filename);
+    if (fs.existsSync(full)) return { ok: false, error: 'File already exists' };
+    const sanitizedColumns = Array.isArray(columns)
+      ? columns.map((c) => String(c || '').trim()).filter((c) => c.length > 0)
+      : [];
+    const schemaFields = sanitizedColumns
+      .map((col) => `      <SimpleField name="${col}" type="string"></SimpleField>`)
+      .join('\n');
+    const content = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${base}</name>
+    <description>Target CRS: ${targetCrs || 'EPSG:4326'}</description>
+    <Schema id="${base}_schema">
+${schemaFields}
+    </Schema>
+  </Document>
+</kml>
+`;
+    fs.writeFileSync(full, content, 'utf8');
+    return { ok: true, path: full };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('fs:createAttributesFile', async (event, { folderPath, name, columns }) => {
+  if (!folderPath) return { ok: false, error: 'Missing folder path' };
+  try {
+    const base = sanitizeBaseName(name, 'attributes');
+    const filename = base.toLowerCase().endsWith('.csv') ? base : `${base}.csv`;
+    const full = path.join(folderPath, filename);
+    if (fs.existsSync(full)) return { ok: false, error: 'File already exists' };
+    const sanitizedColumns = Array.isArray(columns)
+      ? columns.map((c) => String(c || '').trim()).filter((c) => c.length > 0)
+      : [];
+    const header = (sanitizedColumns.length > 0 ? sanitizedColumns : ['id', 'name']).join(',');
+    const content = `${header}\n`;
+    fs.writeFileSync(full, content, 'utf8');
+    return { ok: true, path: full };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('fs:deletePath', async (event, { targetPath }) => {
+  if (!targetPath) return { ok: false, error: 'Missing target path' };
+  try {
+    if (!fs.existsSync(targetPath)) return { ok: false, error: 'Path not found' };
+    const stat = fs.statSync(targetPath);
+    if (stat.isDirectory()) fs.rmSync(targetPath, { recursive: true, force: false });
+    else fs.unlinkSync(targetPath);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
   }
 });
 

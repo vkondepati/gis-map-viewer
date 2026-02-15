@@ -59,6 +59,11 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 #attr-table th,#attr-table td{border:1px solid #ddd;padding:4px;font-size:11px}
 #attr-table th{background:#f0f0f0;position:sticky;top:0;font-weight:bold}
 #attr-table td[contenteditable]{background:#fffbe6}
+#attr-table tr.attr-row-selected td{background:#d8f6ff}
+#attr-table tr.attr-row-selected td.attr-row-selector{background:#00d1ff;color:#00222b;font-weight:700}
+#attr-table td.attr-row-selector{white-space:nowrap;cursor:pointer;min-width:44px}
+#attr-table td.attr-row-selector .row-select-glyph{margin-right:6px;display:inline-block;width:12px;text-align:center}
+#attr-table td.attr-row-selector .row-dirty-indicator{color:#cc6b00;font-weight:700}
 
 /* Connections area */
 #connection-controls{display:flex;flex-direction:column;gap:6px;margin-top:6px}
@@ -87,9 +92,25 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 .toc-list li .layer-name{flex:1}
 .toc-list li.dirty-layer .layer-name::after{content:" *";color:#ffd166;font-weight:700}
 .toc-list input[type="checkbox"]{transform:scale(1.1)}
+.selection-status{margin-top:8px;font-size:12px;color:#99c2dd;text-align:left}
+
+.file-ops-panel{margin-top:14px;padding:8px;border:1px solid #366b94;border-radius:4px;background:#072034}
+.file-ops-header{font-size:13px;font-weight:700;color:#cfe8ff;margin-bottom:8px}
+.file-ops-row{display:flex;gap:6px;margin-bottom:6px}
+.file-ops-panel button,.file-ops-panel select,.file-ops-panel input{font-size:12px}
+.file-ops-panel button{background:#366b94;color:#fff;border:none;padding:6px 8px;border-radius:4px;cursor:pointer}
+.file-ops-panel button:hover{background:#4a8ec0}
+.file-ops-panel select,.file-ops-panel input{width:100%;padding:6px;border:1px solid #366b94;background:#0d2740;color:#fff;border-radius:4px;box-sizing:border-box}
+.file-ops-list{max-height:170px;overflow:auto;border:1px solid #274a66;border-radius:4px;background:#0d2740}
+.file-ops-item{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid #19364d;font-size:12px;cursor:pointer}
+.file-ops-item:last-child{border-bottom:none}
+.file-ops-item:hover{background:#133a58}
+.file-ops-item.selected{background:#1e5f89}
+.file-ops-kind{opacity:0.8;font-size:11px}
 
 /* Symbol swatch */
 .sym-swatch{width:20px;height:20px;border-radius:4px;border:1px solid #ccc;display:inline-block;cursor:pointer}
+.sym-popup{position:fixed;z-index:1200;min-width:320px;max-width:360px;background:#022939;border:1px solid #366b94;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.4)}
 .sym-editor{background:#022939;padding:8px;border-radius:4px;margin-top:6px}
 .sym-editor label{color:#fff;font-size:12px;display:block;margin-bottom:6px}
 .sym-editor input[type="number"],.sym-editor input[type="color"],.sym-editor input[type="range"],.sym-editor select{width:100%}
