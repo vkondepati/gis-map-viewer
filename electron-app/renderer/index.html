@@ -55,12 +55,16 @@
           <div id="edit-menu" style="position:relative;display:inline-block;">
             <button class="toolbar-btn" id="btn-edit" title="Edit Tools">✏️ Edit</button>
             <div id="edit-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="edit-start">Start Editing</button>
+              <button class="dropdown-item" data-tool="edit-stop">Stop Editing</button>
+              <div class="dropdown-sep"></div>
               <button class="dropdown-item" data-tool="edit-add">Add Feature</button>
               <button class="dropdown-item" data-tool="edit-modify">Modify Feature</button>
               <button class="dropdown-item" data-tool="edit-delete">Delete Feature</button>
               <button class="dropdown-item" data-tool="edit-save">Save Edits</button>
               <button class="dropdown-item" data-tool="edit-undo">Undo</button>
               <button class="dropdown-item" data-tool="edit-redo">Redo</button>
+              <button class="dropdown-item" data-tool="open-attributes">Open Attributes</button>
               <button class="dropdown-item" data-tool="update-attributes">Update Attributes</button>
             </div>
           </div>
@@ -70,7 +74,7 @@
             <button class="toolbar-btn" id="btn-analysis" title="Analysis Tools">📊 Analysis</button>
             <div id="analysis-dropdown" class="dropdown-menu" style="display:none;">
               <button class="dropdown-item" data-tool="buffer">Buffer</button>
-              <button class="dropdown-item" data-tool="intersect">Intersect</button>
+              <button class="dropdown-item" data-tool="spatial-relationships">Spatial Relationships</button>
             </div>
           </div>
 
@@ -85,7 +89,8 @@
               <span class="dropdown-group-title">Layer Operations</span>
               <button class="dropdown-item" data-layer-action="draworder">Set Draw Order</button>
             </div>
-          </div>
+          </div>
+
           <button class="toolbar-btn" id="btn-print" title="Print Map">🖨️ Print</button>
         </div>
       </header>
@@ -98,7 +103,34 @@
           </div>
           <div id="layers" class="section-content">
             <ul id="layer-list" class="toc-list"></ul>
+            <div id="selection-status" class="selection-status">Active layer selection: 0 feature(s)</div>
           </div>
+        </div>
+        <div id="file-ops-panel" class="file-ops-panel">
+          <div class="file-ops-header">File Operations</div>
+          <div class="file-ops-row">
+            <button id="file-ops-pick-folder">Select Folder</button>
+            <button id="file-ops-refresh">Refresh</button>
+          </div>
+          <input id="file-ops-folder-path" placeholder="No folder selected" readonly />
+          <div class="file-ops-row">
+            <select id="file-ops-create-type">
+              <option value="folder">Create Folder</option>
+              <option value="geojson">Create GeoJSON</option>
+              <option value="kml">Create KML</option>
+              <option value="attributes">Create Attributes File</option>
+            </select>
+          </div>
+          <input id="file-ops-name" placeholder="Name" />
+          <label id="file-ops-attrs-wrap" style="display:none;align-items:center;gap:6px;font-size:12px;color:#fff;">
+            <input id="file-ops-with-attrs" type="checkbox" style="width:auto;" checked />
+            Include sample attributes
+          </label>
+          <div class="file-ops-row">
+            <button id="file-ops-create">Create</button>
+            <button id="file-ops-delete">Delete Selected</button>
+          </div>
+          <div id="file-ops-list" class="file-ops-list"></div>
         </div>
       </aside>
       <!-- Context Menu for Layer Labels -->
@@ -111,8 +143,15 @@
           <div class="panel-header">
             <h3>Attributes</h3>
             <div style="display:flex;gap:8px;align-items:center">
-              <button id="export-btn" style="padding:4px 8px;font-size:12px">Export</button>
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#fff;">
+                <input id="attr-selected-only" type="checkbox" style="width:auto;" />
+                Selected Only
+              </label>
+              <button id="export-btn" style="padding:4px 8px;font-size:12px">Export CSV</button>
+              <button id="bi-report-btn" style="padding:4px 8px;font-size:12px">BI Reports</button>
+              <button id="print-attr-btn" style="padding:4px 8px;font-size:12px">Print Table</button>
               <button id="apply-attr-btn" style="padding:4px 8px;font-size:12px">Apply Edits</button>
+              <button id="close-attr-btn" style="padding:4px 8px;font-size:12px">Close</button>
               <button class="toggle-btn" data-section="attributes-panel">+</button>
             </div>
           </div>
@@ -221,7 +260,38 @@
           </div>
         </div>
       </div>
+      <div id="dialog-spatial-relationships" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Spatial Relationships</h3>
+          <label>Source Polygon Layer:</label>
+          <select id="spatial-source-layer" style="width:100%;margin:10px 0;"></select>
+          <label>Target Layer:</label>
+          <select id="spatial-target-layer" style="width:100%;margin:10px 0;"></select>
+          <label>Relationship Type:</label>
+          <select id="spatial-relationship-type" style="width:100%;margin:10px 0;">
+            <option value="intersects">Intersect</option>
+            <option value="contains">Contains</option>
+            <option value="within">Within</option>
+            <option value="touches">Touches</option>
+            <option value="shared-boundary">Sharing Same Boundary/Edges</option>
+          </select>
+          <label>Source Features:</label>
+          <select id="spatial-source-scope" style="width:100%;margin:10px 0;">
+            <option value="all">All</option>
+            <option value="selected">Selected</option>
+          </select>
+          <label>Target Attributes to Include:</label>
+          <div id="spatial-target-attrs" style="max-height:140px;overflow:auto;border:1px solid #444;border-radius:4px;padding:8px;margin:10px 0;background:#1f2a38;"></div>
+          <label>Result Layer Name (optional):</label>
+          <input id="spatial-result-layer-name" placeholder="If blank, generated automatically" style="width:100%;margin:10px 0;" />
+          <div style="margin-top:20px;">
+            <button id="spatial-relationships-ok">Run Query</button>
+            <button id="spatial-relationships-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
       <div id="dialog-print-settings" class="connection-dialog modal-hidden">
+
         <div class="dialog-content">
           <h3>Print / PDF Settings</h3>
           <label>Map Title:</label>
@@ -255,6 +325,58 @@
           <div style="margin-top:20px;">
             <button id="print-settings-ok">Generate PDF</button>
             <button id="print-settings-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-bi-report" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>BI Reports</h3>
+          <label>Chart Type:</label>
+          <select id="bi-chart-type">
+            <option value="bar">Bar</option>
+            <option value="line">Line</option>
+            <option value="pie">Pie</option>
+          </select>
+          <label>Category Column:</label>
+          <select id="bi-category-column"></select>
+          <label>Value Column:</label>
+          <select id="bi-value-column">
+            <option value="__count__">Count of Records</option>
+          </select>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <button id="bi-generate-btn">Generate Chart</button>
+            <button id="bi-close-btn">Close</button>
+          </div>
+          <div id="bi-chart-output" style="margin-top:12px;background:#072034;border:1px solid #366b94;border-radius:4px;padding:10px;min-height:220px;overflow:auto;"></div>
+        </div>
+      </div>
+
+      <div id="dialog-file-create" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>Create File</h3>
+          <label>File Location:</label>
+          <div style="display:flex;gap:8px;">
+            <input id="create-file-location" placeholder="Select folder" readonly />
+            <button id="create-file-location-browse" style="margin-top:0;">Browse</button>
+          </div>
+          <label>File Name:</label>
+          <input id="create-file-name" placeholder="File name" />
+          <label>List of Columns:</label>
+          <div id="create-file-columns" style="max-height:130px;overflow:auto;border:1px solid #366b94;border-radius:4px;padding:8px;background:#072034;"></div>
+          <div style="margin-top:8px;">
+            <button id="create-file-add-column" style="margin-top:0;">Add Column</button>
+          </div>
+          <label>Target Coordinate System:</label>
+          <select id="create-file-crs">
+            <option value="EPSG:4326">EPSG:4326 (WGS 84)</option>
+            <option value="EPSG:3857">EPSG:3857 (Web Mercator)</option>
+            <option value="EPSG:32633">EPSG:32633 (UTM Zone 33N)</option>
+            <option value="EPSG:2154">EPSG:2154 (Lambert 93)</option>
+          </select>
+          <div style="margin-top:20px;">
+            <button id="create-file-save">Save</button>
+            <button id="create-file-cancel">Cancel</button>
           </div>
         </div>
       </div>
@@ -361,12 +483,5 @@
     <script src="renderer.js"></script>
   </body>
 </html>
-
-
-
-
-
-
-
 
 
