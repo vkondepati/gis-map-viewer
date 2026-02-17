@@ -4522,6 +4522,253 @@ window.addEventListener('DOMContentLoaded', () => {
       if (activeEntry) renderAttributeTable(activeEntry);
     });
   }
+
+  const mapChatFab = document.getElementById('map-chat-fab');
+  const mapChatPanel = document.getElementById('map-chat-panel');
+  const mapChatClose = document.getElementById('map-chat-close');
+  const mapChatMessages = document.getElementById('map-chat-messages');
+  const mapChatForm = document.getElementById('map-chat-form');
+  const mapChatInput = document.getElementById('map-chat-input');
+  const mapChatSend = document.getElementById('map-chat-send');
+  const MAP_CHAT_LIMITS = {
+    maxHistoryTurns: 20,
+    maxFeaturesInExtent: 200,
+    maxSelectedFeatures: 100,
+    maxLayerColumns: 20,
+    maxPropsPerFeature: 12,
+  };
+  const MAP_CHAT_PRIORITY_PROP_KEYS = [
+    'id', 'name', 'title', 'station', 'station_name', 'facility', 'type', 'category',
+    'address', 'addr', 'street', 'city', 'state', 'zip', 'zipcode', 'county',
+    'district', 'status', 'owner',
+  ];
+  const mapChatState = {
+    sessionId: `mapchat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    turns: [],
+  };
+
+  function appendMapChatMessage(role, text) {
+    if (!mapChatMessages) return;
+    const row = document.createElement('div');
+    row.className = `map-chat-msg ${role === 'user' ? 'user' : 'assistant'}`;
+    row.textContent = String(text || '');
+    mapChatMessages.appendChild(row);
+    mapChatMessages.scrollTop = mapChatMessages.scrollHeight;
+  }
+
+  function setMapChatOpen(open) {
+    if (!mapChatPanel) return;
+    mapChatPanel.classList.toggle('open', !!open);
+    mapChatPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    if (open && mapChatInput) mapChatInput.focus();
+  }
+
+  function sanitizeMapChatValue(value) {
+    if (value == null) return null;
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    const text = String(value);
+    return text.length > 120 ? `${text.slice(0, 120)}...` : text;
+  }
+
+  function summarizeFeatureProperties(feature, maxKeys = MAP_CHAT_LIMITS.maxPropsPerFeature) {
+    const props = (feature && feature.properties && typeof feature.properties === 'object')
+      ? feature.properties
+      : {};
+    const keys = Object.keys(props);
+    const selected = [];
+    MAP_CHAT_PRIORITY_PROP_KEYS.forEach((k) => {
+      if (selected.length >= maxKeys) return;
+      if (Object.prototype.hasOwnProperty.call(props, k) && !selected.includes(k)) selected.push(k);
+    });
+    keys.forEach((k) => {
+      if (selected.length >= maxKeys) return;
+      if (!selected.includes(k)) selected.push(k);
+    });
+    const out = {};
+    selected.forEach((k) => {
+      out[k] = sanitizeMapChatValue(props[k]);
+    });
+    return out;
+  }
+
+  function getFeatureCoordinateSummary(featureLayer) {
+    if (!featureLayer) return null;
+    try {
+      if (typeof featureLayer.getLatLng === 'function') {
+        const latlng = featureLayer.getLatLng();
+        if (latlng && Number.isFinite(latlng.lat) && Number.isFinite(latlng.lng)) {
+          return { lat: Number(latlng.lat.toFixed(6)), lng: Number(latlng.lng.toFixed(6)) };
+        }
+      }
+      if (typeof featureLayer.getBounds === 'function') {
+        const bounds = featureLayer.getBounds();
+        if (bounds && bounds.isValid && bounds.isValid()) {
+          const center = bounds.getCenter();
+          return { lat: Number(center.lat.toFixed(6)), lng: Number(center.lng.toFixed(6)) };
+        }
+      }
+    } catch (err) {
+      return null;
+    }
+    return null;
+  }
+
+  function serializeFeatureForMapChat(featureLayer) {
+    if (!featureLayer || !featureLayer.feature) return null;
+    const owner = getFeatureOwnerEntry(featureLayer);
+    const feature = featureLayer.feature;
+    const geometryType = feature && feature.geometry ? feature.geometry.type : null;
+    const ownerGeometryType = owner ? getLayerGeometryType(owner) : null;
+    const featureIndex = owner ? getFeatureIndex(owner, featureLayer) : -1;
+    return {
+      layerId: owner ? owner.id : null,
+      layerName: owner ? owner.name : null,
+      layerGeometryType: ownerGeometryType,
+      featureIndex,
+      geometryType,
+      coordinates: getFeatureCoordinateSummary(featureLayer),
+      properties: summarizeFeatureProperties(feature),
+    };
+  }
+
+  function buildMapAssistantContext() {
+    const activeEntry = getActiveLayerEntry();
+    const mapBounds = map && typeof map.getBounds === 'function' ? map.getBounds() : null;
+    const mapCenter = map && typeof map.getCenter === 'function' ? map.getCenter() : null;
+    const selectedOnActive = getActiveLayerSelectionCount();
+    const allVisibleFeatures = getFeatureLayers(false);
+    const featuresInExtent = [];
+    const inExtentCountsByLayer = new Map();
+    allVisibleFeatures.forEach((featureLayer) => {
+      if (!mapBounds || !featureIntersectsBounds(featureLayer, mapBounds)) return;
+      const serialized = serializeFeatureForMapChat(featureLayer);
+      if (!serialized) return;
+      if (featuresInExtent.length < MAP_CHAT_LIMITS.maxFeaturesInExtent) {
+        featuresInExtent.push(serialized);
+      }
+      const layerId = serialized.layerId || '__unknown__';
+      inExtentCountsByLayer.set(layerId, (inExtentCountsByLayer.get(layerId) || 0) + 1);
+    });
+    const selectedFeatures = Array.from(selectedFeatureSet)
+      .slice(0, MAP_CHAT_LIMITS.maxSelectedFeatures)
+      .map((featureLayer) => serializeFeatureForMapChat(featureLayer))
+      .filter(Boolean);
+    const layerSummaries = layers.map((entry) => {
+      const features = entry && entry.geojson && Array.isArray(entry.geojson.features) ? entry.geojson.features : [];
+      const columns = new Set();
+      features.slice(0, 50).forEach((f) => {
+        const props = (f && f.properties && typeof f.properties === 'object') ? f.properties : {};
+        Object.keys(props).forEach((k) => columns.add(k));
+      });
+      return {
+        id: entry.id,
+        name: entry.name,
+        geometryType: getLayerGeometryType(entry),
+        visible: !!(map && entry.layer && map.hasLayer(entry.layer)),
+        totalCount: features.length,
+        inExtentCount: inExtentCountsByLayer.get(entry.id) || 0,
+        dirty: dirtyLayerIds.has(entry.id),
+        sampleColumns: Array.from(columns).slice(0, MAP_CHAT_LIMITS.maxLayerColumns),
+      };
+    });
+    return {
+      map: {
+        zoom: map && typeof map.getZoom === 'function' ? map.getZoom() : null,
+        center: mapCenter ? { lat: Number(mapCenter.lat.toFixed(6)), lng: Number(mapCenter.lng.toFixed(6)) } : null,
+        bounds: mapBounds ? {
+          south: Number(mapBounds.getSouth().toFixed(6)),
+          west: Number(mapBounds.getWest().toFixed(6)),
+          north: Number(mapBounds.getNorth().toFixed(6)),
+          east: Number(mapBounds.getEast().toFixed(6)),
+        } : null,
+      },
+      activeLayer: activeEntry ? { id: activeEntry.id, name: activeEntry.name, geometryType: getLayerGeometryType(activeEntry) } : null,
+      selection: {
+        activeLayerSelectedCount: selectedOnActive,
+        totalSelectedCount: selectedFeatureSet.size,
+      },
+      editing: {
+        active: editingSessionActive,
+        layerId: editingSessionLayerId,
+      },
+      layersSummary: layerSummaries,
+      featuresInExtent,
+      selectedFeatures,
+      limits: Object.assign({}, MAP_CHAT_LIMITS),
+    };
+  }
+
+  function getMapChatHistoryForRequest() {
+    if (!Array.isArray(mapChatState.turns)) return [];
+    return mapChatState.turns
+      .slice(-MAP_CHAT_LIMITS.maxHistoryTurns)
+      .map((turn) => ({ role: turn.role, text: turn.text }));
+  }
+
+  function pushMapChatTurn(role, text) {
+    mapChatState.turns.push({ role, text: String(text || '') });
+    if (mapChatState.turns.length > MAP_CHAT_LIMITS.maxHistoryTurns) {
+      mapChatState.turns = mapChatState.turns.slice(-MAP_CHAT_LIMITS.maxHistoryTurns);
+    }
+  }
+
+  async function handleMapChatSubmit() {
+    if (!mapChatInput || !mapChatSend) return;
+    const question = (mapChatInput.value || '').trim();
+    if (!question) return;
+    appendMapChatMessage('user', question);
+    pushMapChatTurn('user', question);
+    mapChatInput.value = '';
+    mapChatSend.disabled = true;
+    appendMapChatMessage('assistant', 'Analyzing map...');
+    const pendingNode = mapChatMessages ? mapChatMessages.lastElementChild : null;
+    try {
+      if (!window.electronAPI.askMapAssistant) {
+        throw new Error('Chat assistant API is not available.');
+      }
+      const mapContext = buildMapAssistantContext();
+      const payload = {
+        sessionId: mapChatState.sessionId,
+        history: getMapChatHistoryForRequest(),
+        question,
+        mapContext,
+      };
+      const res = await window.electronAPI.askMapAssistant(payload);
+      if (pendingNode && pendingNode.parentElement === mapChatMessages) pendingNode.remove();
+      if (!res || !res.ok) {
+        const errorText = `Unable to answer: ${res && res.error ? res.error : 'Unknown error'}`;
+        appendMapChatMessage('assistant', errorText);
+        pushMapChatTurn('assistant', errorText);
+        return;
+      }
+      const answerText = res.answer || 'No response';
+      appendMapChatMessage('assistant', answerText);
+      pushMapChatTurn('assistant', answerText);
+    } catch (err) {
+      if (pendingNode && pendingNode.parentElement === mapChatMessages) pendingNode.remove();
+      const errorText = `Unable to answer: ${err && err.message ? err.message : 'Request failed'}`;
+      appendMapChatMessage('assistant', errorText);
+      pushMapChatTurn('assistant', errorText);
+    } finally {
+      mapChatSend.disabled = false;
+      if (mapChatInput) mapChatInput.focus();
+    }
+  }
+
+  if (mapChatFab) {
+    mapChatFab.addEventListener('click', () => {
+      const willOpen = !(mapChatPanel && mapChatPanel.classList.contains('open'));
+      setMapChatOpen(willOpen);
+    });
+  }
+  if (mapChatClose) mapChatClose.addEventListener('click', () => setMapChatOpen(false));
+  if (mapChatForm) {
+    mapChatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await handleMapChatSubmit();
+    });
+  }
+
   updateSelectedFeaturesWindow();
 });
 
