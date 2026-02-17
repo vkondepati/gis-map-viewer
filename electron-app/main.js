@@ -5,6 +5,37 @@ const fs = require('fs');
 let mainWindow = null;
 let pendingProjectPath = null;
 
+function loadDotEnvFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    const text = fs.readFileSync(filePath, 'utf8');
+    text.split(/\r?\n/).forEach((line) => {
+      const trimmed = String(line || '').trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+      if (!match) return;
+      const key = match[1];
+      if (Object.prototype.hasOwnProperty.call(process.env, key) && process.env[key] !== undefined) return;
+      let value = match[2] || '';
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      process.env[key] = value.replace(/\\n/g, '\n');
+    });
+  } catch (err) {
+    console.warn(`Failed loading env file ${filePath}: ${err.message}`);
+  }
+}
+
+function loadEnvironmentFiles() {
+  const hereEnv = path.join(__dirname, '.env');
+  const parentEnv = path.join(__dirname, '..', '.env');
+  loadDotEnvFile(parentEnv);
+  loadDotEnvFile(hereEnv);
+}
+
+loadEnvironmentFiles();
+
 function getProjectPathFromArgv(argv = []) {
   const candidate = argv.find((arg) => typeof arg === 'string' && /\.prj$/i.test(arg) && fs.existsSync(arg));
   return candidate || null;
@@ -132,6 +163,84 @@ function createWindow() {
       pendingProjectPath = null;
     }
   });
+}
+
+function trimText(input, maxLength = 1200) {
+  const normalized = String(input || '').replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength)}...`;
+}
+
+function extractResponseText(payload) {
+  if (!payload || typeof payload !== 'object') return '';
+  if (typeof payload.output_text === 'string' && payload.output_text.trim()) return payload.output_text.trim();
+  if (!Array.isArray(payload.output)) return '';
+  const out = [];
+  payload.output.forEach((item) => {
+    if (!item || !Array.isArray(item.content)) return;
+    item.content.forEach((part) => {
+      if (!part || typeof part !== 'object') return;
+      if (typeof part.text === 'string' && part.text.trim()) out.push(part.text.trim());
+      if (typeof part.output_text === 'string' && part.output_text.trim()) out.push(part.output_text.trim());
+    });
+  });
+  return out.join('\n').trim();
+}
+
+async function callOpenAIMapAssistant(question, mapContext) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return { ok: false, error: 'OPENAI_API_KEY is not configured in environment variables.' };
+  const model = /^[a-zA-Z0-9._:-]{1,80}$/.test(process.env.OPENAI_MODEL || '')
+    ? process.env.OPENAI_MODEL
+    : 'gpt-4o-mini';
+  const sanitizedQuestion = trimText(question, 1500);
+  const contextString = trimText(JSON.stringify(mapContext || {}, null, 2), 24000);
+  const systemPrompt = [
+    'You are a GIS assistant for a desktop map application.',
+    'Answer only from provided map context and user question.',
+    'If context is insufficient, clearly say what is missing.',
+    'Do not claim access to files, network, or external tools.',
+    'Keep answers concise and practical.',
+  ].join(' ');
+  const userPrompt = `User question:\n${sanitizedQuestion}\n\nMap context JSON:\n${contextString}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        input: [
+          { role: 'system', content: [{ type: 'input_text', text: systemPrompt }] },
+          { role: 'user', content: [{ type: 'input_text', text: userPrompt }] },
+        ],
+        temperature: 0.2,
+        max_output_tokens: 650,
+      }),
+      signal: controller.signal,
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      const errMsg = payload && payload.error && payload.error.message
+        ? payload.error.message
+        : `OpenAI request failed with status ${response.status}`;
+      return { ok: false, error: errMsg };
+    }
+    const text = extractResponseText(payload);
+    if (!text) return { ok: false, error: 'Assistant returned an empty response.' };
+    return { ok: true, answer: text };
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      return { ok: false, error: 'Assistant request timed out. Please try again.' };
+    }
+    return { ok: false, error: err && err.message ? err.message : 'Assistant request failed.' };
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -374,6 +483,18 @@ ipcMain.handle('fs:deletePath', async (event, { targetPath }) => {
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+ipcMain.handle('ai:mapAssistantAsk', async (event, payload = {}) => {
+  const question = typeof payload === 'object' && payload !== null
+    ? payload.question
+    : '';
+  const mapContext = typeof payload === 'object' && payload !== null
+    ? (payload.mapContext || {})
+    : {};
+  const sanitizedQuestion = String(question || '').trim();
+  if (!sanitizedQuestion) return { ok: false, error: 'Question is required.' };
+  return callOpenAIMapAssistant(sanitizedQuestion, mapContext || {});
 });
 
 ipcMain.handle('dialog:saveProjectFile', async (event, { defaultName, content, preferredPath }) => {

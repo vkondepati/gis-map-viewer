@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createKMLFile: (folderPath, name, columns, targetCrs) => ipcRenderer.invoke('fs:createKMLFile', { folderPath, name, columns, targetCrs }),
   createAttributesFile: (folderPath, name, columns) => ipcRenderer.invoke('fs:createAttributesFile', { folderPath, name, columns }),
   deletePath: (targetPath) => ipcRenderer.invoke('fs:deletePath', { targetPath }),
+  askMapAssistant: (payload) => ipcRenderer.invoke('ai:mapAssistantAsk', payload),
   onOpenProjectFromShell: (callback) => {
     ipcRenderer.on('project:openPath', (event, payload) => callback(payload));
   },
