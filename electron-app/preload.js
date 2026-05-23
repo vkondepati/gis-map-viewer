@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   openGeoJSON: () => ipcRenderer.invoke('dialog:openFile'),
+  openSpatialFile: () => ipcRenderer.invoke('dialog:openFile'),
   saveGeoJSON: (defaultName, content) => ipcRenderer.invoke('dialog:saveFile', { defaultName, content }),
   saveTextFile: (defaultName, content) => ipcRenderer.invoke('dialog:saveTextFile', { defaultName, content }),
   writeGeoJSON: (filePath, content) => ipcRenderer.invoke('dialog:writeFile', { filePath, content }),

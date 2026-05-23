@@ -4,6 +4,52 @@ let lastGeoJSONLoaded = null;
 let lastGeoJSONSourceCRS = null;
 let layers = []; // {id, name, layer, visible, geojson, geometryType}
 let layerIdSeq = 1;
+const DEFAULT_BASEMAP_ID = 'osm-standard';
+let currentBasemapId = DEFAULT_BASEMAP_ID;
+const BASEMAP_DEFINITIONS = [
+  {
+    id: 'osm-standard',
+    label: 'OpenStreetMap',
+    tileUrl: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    options: {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors',
+    },
+    thumbnail: 'https://tile.openstreetmap.org/3/2/3.png',
+  },
+  {
+    id: 'carto-light',
+    label: 'Carto Positron',
+    tileUrl: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    options: {
+      subdomains: 'abcd',
+      maxZoom: 20,
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    },
+    thumbnail: 'https://a.basemaps.cartocdn.com/light_all/3/2/3.png',
+  },
+  {
+    id: 'carto-dark',
+    label: 'Carto Dark Matter',
+    tileUrl: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    options: {
+      subdomains: 'abcd',
+      maxZoom: 20,
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    },
+    thumbnail: 'https://a.basemaps.cartocdn.com/dark_all/3/2/3.png',
+  },
+  {
+    id: 'esri-imagery',
+    label: 'Esri World Imagery',
+    tileUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    options: {
+      maxZoom: 19,
+      attribution: 'Tiles &copy; Esri',
+    },
+    thumbnail: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/3/3/2',
+  },
+];
 let activeLayerId = null;
 let currentProjectPath = null;
 let projectDirty = false;
@@ -289,10 +335,59 @@ function createMap(crs) {
   // For simplicity we use standard CRS handling: Leaflet default (EPSG:3857)
   map = L.map('map', { center: [0, 0], zoom: 2 });
   window.map = map;
-  baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors',
-  }).addTo(map);
+  setBasemap(currentBasemapId, { silent: true, markDirty: false });
+}
+
+function getBasemapDefinition(basemapId) {
+  return BASEMAP_DEFINITIONS.find((item) => item.id === basemapId) || null;
+}
+
+function setBasemap(basemapId, options = {}) {
+  const { silent = false, markDirty = true } = options;
+  const basemap = getBasemapDefinition(basemapId) || getBasemapDefinition(DEFAULT_BASEMAP_ID);
+  if (!map || !basemap) return false;
+  if (baseLayer && map.hasLayer(baseLayer)) map.removeLayer(baseLayer);
+  baseLayer = L.tileLayer(basemap.tileUrl, Object.assign({}, basemap.options || {})).addTo(map);
+  currentBasemapId = basemap.id;
+  if (markDirty) markProjectDirty(true);
+  if (!silent) updateBasemapSelectionUI();
+  return true;
+}
+
+function updateBasemapSelectionUI() {
+  const buttonLabel = document.getElementById('selected-basemap-label');
+  const basemapList = document.getElementById('basemap-dropdown');
+  const current = getBasemapDefinition(currentBasemapId) || getBasemapDefinition(DEFAULT_BASEMAP_ID);
+  if (buttonLabel && current) buttonLabel.textContent = current.label;
+  if (basemapList) {
+    basemapList.querySelectorAll('.basemap-item').forEach((item) => {
+      item.classList.toggle('active', item.dataset.basemapId === currentBasemapId);
+    });
+  }
+}
+
+function renderBasemapDropdown() {
+  const list = document.getElementById('basemap-dropdown');
+  if (!list) return;
+  list.innerHTML = '';
+  BASEMAP_DEFINITIONS.forEach((basemap) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'dropdown-item basemap-item';
+    btn.dataset.basemapId = basemap.id;
+    btn.innerHTML = `
+      <img class="basemap-thumb" src="${basemap.thumbnail}" alt="${basemap.label}" loading="lazy" />
+      <span class="basemap-label">${basemap.label}</span>
+    `;
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setBasemap(basemap.id);
+      list.style.display = 'none';
+    });
+    list.appendChild(btn);
+  });
+  updateBasemapSelectionUI();
 }
 
 function getDashArrayForLineStyle(lineStyle) {
@@ -382,6 +477,252 @@ function getFileBaseName(filePath = '') {
   return name.replace(/\.[^/.]+$/, '') || 'Layer';
 }
 
+function base64ToArrayBuffer(base64) {
+  const binary = atob(String(base64 || ''));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function combineFeatureCollections(input) {
+  if (!input) return { type: 'FeatureCollection', features: [] };
+  if (Array.isArray(input)) {
+    return {
+      type: 'FeatureCollection',
+      features: input.flatMap((item) => {
+        if (!item) return [];
+        if (Array.isArray(item.features)) return item.features;
+        if (item.type === 'Feature') return [item];
+        return [];
+      }),
+    };
+  }
+  if (input.type === 'FeatureCollection') return input;
+  if (input.type === 'Feature') return { type: 'FeatureCollection', features: [input] };
+  return { type: 'FeatureCollection', features: [] };
+}
+
+async function parseSpatialFilePayload(filePayload) {
+  if (!filePayload || !filePayload.path) {
+    throw new Error('Missing file payload.');
+  }
+  const extension = String(filePayload.extension || '').toLowerCase();
+  if (extension === '.geojson' || extension === '.json') {
+    return {
+      geojson: JSON.parse(filePayload.content),
+      sourceCrs: null,
+      sourcePath: filePayload.path,
+    };
+  }
+  if (extension === '.zip' || extension === '.shp') {
+    if (typeof shp !== 'function') {
+      throw new Error('Shapefile parser is not available.');
+    }
+    let parsed;
+    if (extension === '.zip') {
+      parsed = await shp(base64ToArrayBuffer(filePayload.content));
+    } else {
+      const shapeParts = {
+        shp: base64ToArrayBuffer(filePayload.content),
+      };
+      const related = filePayload.relatedFiles || {};
+      if (related.dbf && related.dbf.content) shapeParts.dbf = base64ToArrayBuffer(related.dbf.content);
+      if (related.prj && typeof related.prj.content === 'string') shapeParts.prj = related.prj.content;
+      if (related.cpg && typeof related.cpg.content === 'string') shapeParts.cpg = related.cpg.content;
+      parsed = await shp(shapeParts);
+    }
+    return {
+      geojson: combineFeatureCollections(parsed),
+      sourceCrs: 'EPSG:4326',
+      sourcePath: filePayload.path,
+    };
+  }
+  throw new Error(`Unsupported file type: ${extension || 'unknown'}`);
+}
+
+function normalizeArcGISRestLayerUrl(rawUrl) {
+  const trimmed = String(rawUrl || '').trim();
+  if (!trimmed) return '';
+  const parsed = new URL(trimmed);
+  parsed.hash = '';
+  parsed.search = '';
+  const normalizedPath = parsed.pathname.replace(/\/query$/i, '').replace(/\/+$/, '');
+  parsed.pathname = normalizedPath;
+  return parsed.toString();
+}
+
+async function fetchJsonOrThrow(url) {
+  const response = await fetch(url);
+  const payload = await response.json();
+  if (!response.ok) {
+    const message = payload && payload.error && payload.error.message
+      ? payload.error.message
+      : `Request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+  if (payload && payload.error && payload.error.message) {
+    throw new Error(payload.error.message);
+  }
+  return payload;
+}
+
+async function loadArcGISRestLayer(layerUrl) {
+  const normalizedUrl = normalizeArcGISRestLayerUrl(layerUrl);
+  if (!normalizedUrl) throw new Error('Layer URL is required.');
+  const metadata = await fetchJsonOrThrow(`${normalizedUrl}?f=json`);
+  const supportedFormats = String(metadata.supportedQueryFormats || '').toLowerCase();
+  if (!supportedFormats.includes('geojson')) {
+    throw new Error('This ArcGIS layer does not advertise geojson query support.');
+  }
+  const maxRecordCount = Math.max(1, Number(metadata.maxRecordCount) || 2000);
+  const features = [];
+  let resultOffset = 0;
+  let exceeded = false;
+  do {
+    const queryUrl = new URL(`${normalizedUrl}/query`);
+    queryUrl.searchParams.set('where', '1=1');
+    queryUrl.searchParams.set('outFields', '*');
+    queryUrl.searchParams.set('returnGeometry', 'true');
+    queryUrl.searchParams.set('f', 'geojson');
+    queryUrl.searchParams.set('outSR', '4326');
+    queryUrl.searchParams.set('resultOffset', String(resultOffset));
+    queryUrl.searchParams.set('resultRecordCount', String(maxRecordCount));
+    const page = await fetchJsonOrThrow(queryUrl.toString());
+    const pageFeatures = Array.isArray(page.features) ? page.features : [];
+    features.push(...pageFeatures);
+    exceeded = !!page.exceededTransferLimit;
+    resultOffset += pageFeatures.length;
+    if (pageFeatures.length === 0) break;
+  } while (exceeded);
+  return {
+    name: metadata.name || getFileBaseName(normalizedUrl),
+    sourcePath: normalizedUrl,
+    geojson: {
+      type: 'FeatureCollection',
+      features,
+    },
+  };
+}
+
+function inferGeometryTypeFromArcGISMetadata(metadata) {
+  const rawType = String(metadata && metadata.geometryType || '').toLowerCase();
+  if (rawType.includes('polygon')) return 'Polygon';
+  if (rawType.includes('polyline') || rawType.includes('line')) return 'LineString';
+  if (rawType.includes('point')) return 'Point';
+  return 'Point';
+}
+
+function parseArcGISLayerReference(layerUrl) {
+  const normalizedUrl = normalizeArcGISRestLayerUrl(layerUrl);
+  const featureMatch = normalizedUrl.match(/\/FeatureServer\/(\d+)$/i);
+  if (featureMatch) {
+    return {
+      normalizedUrl,
+      serviceUrl: normalizedUrl.replace(/\/FeatureServer\/\d+$/i, '/MapServer'),
+      layerId: Number(featureMatch[1]),
+      sourceKind: 'FeatureServer',
+    };
+  }
+  const mapMatch = normalizedUrl.match(/\/MapServer\/(\d+)$/i);
+  if (mapMatch) {
+    return {
+      normalizedUrl,
+      serviceUrl: normalizedUrl.replace(/\/MapServer\/\d+$/i, '/MapServer'),
+      layerId: Number(mapMatch[1]),
+      sourceKind: 'MapServer',
+    };
+  }
+  return {
+    normalizedUrl,
+    serviceUrl: normalizedUrl,
+    layerId: null,
+    sourceKind: /\/MapServer$/i.test(normalizedUrl) ? 'MapServer' : 'Unknown',
+  };
+}
+
+function projectArcGISExtentToBounds(extent) {
+  if (!extent || !extent.spatialReference) return null;
+  const wkid = Number(extent.spatialReference.latestWkid || extent.spatialReference.wkid || 0);
+  const xmin = Number(extent.xmin);
+  const ymin = Number(extent.ymin);
+  const xmax = Number(extent.xmax);
+  const ymax = Number(extent.ymax);
+  if (![xmin, ymin, xmax, ymax].every(Number.isFinite)) return null;
+  if (wkid === 4326) {
+    return L.latLngBounds([ymin, xmin], [ymax, xmax]);
+  }
+  if ((wkid === 3857 || wkid === 102100) && typeof proj4 === 'function') {
+    const sw = proj4('EPSG:3857', 'EPSG:4326', [xmin, ymin]);
+    const ne = proj4('EPSG:3857', 'EPSG:4326', [xmax, ymax]);
+    return L.latLngBounds([sw[1], sw[0]], [ne[1], ne[0]]);
+  }
+  return null;
+}
+
+async function addArcGISRestServiceLayer(layerUrl, options = {}) {
+  const layerRef = parseArcGISLayerReference(layerUrl);
+  if (!layerRef.normalizedUrl) throw new Error('Layer URL is required.');
+  if (!window.L || !L.esri) {
+    throw new Error('Esri Leaflet is not available.');
+  }
+  const metadata = await fetchJsonOrThrow(`${layerRef.normalizedUrl}?f=json`);
+  const id = 'layer-' + layerIdSeq++;
+  const geometryType = inferGeometryTypeFromArcGISMetadata(metadata);
+  if (!layerSym[id]) {
+    entrySetSymDefaults(id, getDefaultSymbology(geometryType));
+  }
+  let serviceLayer = null;
+  if (layerRef.layerId != null && typeof L.esri.dynamicMapLayer === 'function') {
+    serviceLayer = L.esri.dynamicMapLayer({
+      url: layerRef.serviceUrl,
+      layers: [layerRef.layerId],
+      opacity: 0.85,
+      transparent: true,
+    });
+  } else if (typeof L.esri.featureLayer === 'function') {
+    serviceLayer = L.esri.featureLayer({
+      url: layerRef.normalizedUrl,
+      simplifyFactor: 0.35,
+      precision: 6,
+    });
+    serviceLayer.bindPopup((layer) => {
+      const props = layer && layer.feature && layer.feature.properties ? layer.feature.properties : {};
+      return `<pre>${escapeHtml(JSON.stringify(props, null, 2))}</pre>`;
+    });
+  } else {
+    throw new Error('No supported ArcGIS layer type is available.');
+  }
+  const entry = {
+    id,
+    name: options.name || metadata.name || getFileBaseName(layerRef.normalizedUrl),
+    layer: serviceLayer,
+    visible: true,
+    geojson: null,
+    geometryType,
+    sourcePath: layerRef.normalizedUrl,
+    sourceType: 'arcgis-rest',
+    serviceMetadata: metadata,
+  };
+
+  serviceLayer.addTo(map);
+  layers.push(entry);
+  activeLayerId = id;
+  currentGeoJsonLayer = null;
+  lastGeoJSONLoaded = null;
+  renderLayerList();
+
+  try {
+    const extentBounds = projectArcGISExtentToBounds(metadata.extent || metadata.fullExtent || metadata.initialExtent);
+    if (extentBounds && extentBounds.isValid && extentBounds.isValid()) {
+      map.fitBounds(extentBounds, { padding: [20, 20] });
+    }
+  } catch (err) {
+    console.warn('Unable to fit ArcGIS REST layer extent:', err);
+  }
+
+  return entry;
+}
+
 function addGeoJSONLayer(geojson, name, options = {}) {
   const id = 'layer-' + layerIdSeq++;
   const geometryType = inferGeometryTypeFromGeoJSON(geojson, 'Point');
@@ -409,50 +750,10 @@ function addGeoJSONLayer(geojson, name, options = {}) {
     // ignore
   }
 
-  // add to layer list (TOC) with checkbox
-  const li = document.createElement('li');
-  li.dataset.layerId = id;
-  li.classList.toggle('active-layer', id === activeLayerId);
-  const cb = document.createElement('input');
-  cb.type = 'checkbox';
-  cb.checked = true;
-  cb.dataset.layerId = id;
-  cb.addEventListener('change', (ev) => {
-    toggleLayerVisibility(ev.target.dataset.layerId, ev.target.checked);
-  });
-  // symbol swatch
-  const sw = document.createElement('div');
-  sw.className = 'sym-swatch';
-  sw.dataset.layerId = id;
-  const defaultSym = getLayerSymDefaults(id) || getDefaultSymbology(geometryType);
-  applySymToSwatch(sw, defaultSym, geometryType);
-  sw.addEventListener('click', (e) => showSymEditor(e.target.dataset.layerId, li));
-
-  const lbl = document.createElement('span');
-  lbl.className = 'layer-name';
-  lbl.textContent = name || id;
-  li.appendChild(cb);
-  li.appendChild(sw);
-  li.appendChild(lbl);
-
-  li.addEventListener('click', async (e) => {
-    if (e.target && e.target.closest('input[type="checkbox"], .sym-swatch')) return;
-    const switched = await setActiveLayer(id);
-    if (!switched) return;
-    const entry = layers.find((layerEntry) => layerEntry.id === id);
-    if (entry) {
-      lastGeoJSONLoaded = entry.geojson;
-      currentGeoJsonLayer = entry.layer;
-      renderAttributeTable(entry);
-    }
-  });
-  
-  document.getElementById('layer-list').appendChild(li);
-
   // populate attribute table for the last loaded geojson
   lastGeoJSONLoaded = geojson;
   renderAttributeTable(layers.find((layerEntry) => layerEntry.id === id));
-  refreshLayerListState();
+  renderLayerList();
 }
 
 // Layer label context menu
@@ -1814,6 +2115,8 @@ window.addEventListener('DOMContentLoaded', () => {
       dirtyLayerIds.clear();
       layerIdSeq = 1;
       projectDirty = false;
+      setBasemap(DEFAULT_BASEMAP_ID, { markDirty: false, silent: true });
+      updateBasemapSelectionUI();
       renderLayerList();
       const attributeTable = document.getElementById('attribute-table');
       if (attributeTable) attributeTable.style.display = 'none';
@@ -1822,7 +2125,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
     function buildProjectState() {
       const center = map ? map.getCenter() : null;
-      const mapState = center ? { center: [center.lat, center.lng], zoom: map.getZoom() } : null;
+      const mapState = center
+        ? { center: [center.lat, center.lng], zoom: map.getZoom(), basemapId: currentBasemapId }
+        : { basemapId: currentBasemapId };
       return {
         type: 'NexaMapProject',
         version: 1,
@@ -1910,6 +2215,12 @@ window.addEventListener('DOMContentLoaded', () => {
           map.setView([lat, lng], zoom);
         }
       }
+      if (projectData.map && projectData.map.basemapId) {
+        setBasemap(String(projectData.map.basemapId), { markDirty: false, silent: true });
+      } else {
+        setBasemap(DEFAULT_BASEMAP_ID, { markDirty: false, silent: true });
+      }
+      updateBasemapSelectionUI();
 
       const activeEntry = getActiveLayerEntry();
       if (activeEntry) refreshAttributesForEntry(activeEntry);
@@ -2124,10 +2435,16 @@ window.addEventListener('DOMContentLoaded', () => {
         sw.dataset.layerId = l.id;
         const sym = getLayerSymDefaults(l.id) || getDefaultSymbology(l.geometryType || 'Point');
         applySymToSwatch(sw, sym, l.geometryType || inferGeometryTypeFromGeoJSON(l.geojson, 'Point'));
-        sw.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showSymEditor(e.target.dataset.layerId, li);
-        });
+        if (l.sourceType !== 'arcgis-rest') {
+          sw.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showSymEditor(e.target.dataset.layerId, li);
+          });
+        } else {
+          sw.title = 'ArcGIS REST layer styling is controlled by the service';
+          sw.style.opacity = '0.8';
+          sw.style.cursor = 'default';
+        }
         const lbl = document.createElement('span');
         lbl.className = 'layer-name';
         lbl.textContent = l.name;
@@ -2209,26 +2526,27 @@ window.addEventListener('DOMContentLoaded', () => {
   const openBtn = document.getElementById('open-btn');
   if (openBtn) {
     openBtn.addEventListener('click', async () => {
-      const res = await window.electronAPI.openGeoJSON();
+      const res = await window.electronAPI.openSpatialFile();
       if (res && !res.canceled) {
         try {
-          const parsed = JSON.parse(res.content);
+          const loaded = await parseSpatialFilePayload(res);
+          const parsed = loaded.geojson;
 
           // Determine source CRS: prefer GeoJSON `crs` member if present, else use user-selected CRS
           let sourceCrs = null;
           if (parsed.crs && parsed.crs.properties && parsed.crs.properties.name) {
             sourceCrs = normalizeCRSName(parsed.crs.properties.name);
           }
-          if (!sourceCrs) {
+          if (!sourceCrs && !loaded.sourceCrs) {
             sourceCrs = document.getElementById('crs-select').value || 'EPSG:4326';
           }
           lastGeoJSONLoaded = parsed;
-          lastGeoJSONSourceCRS = sourceCrs;
+          lastGeoJSONSourceCRS = loaded.sourceCrs || sourceCrs;
 
-          const transformed = reprojectGeoJSON(parsed, sourceCrs, 'EPSG:3857');
-          addGeoJSONLayer(transformed, getFileBaseName(res.path), { sourcePath: res.path });
+          const transformed = reprojectGeoJSON(parsed, loaded.sourceCrs || sourceCrs, 'EPSG:3857');
+          addGeoJSONLayer(transformed, getFileBaseName(res.path), { sourcePath: loaded.sourcePath || res.path });
         } catch (err) {
-          alert('Failed to parse GeoJSON: ' + err.message);
+          alert('Failed to open file: ' + err.message);
         }
       }
     });
@@ -2280,8 +2598,11 @@ window.addEventListener('DOMContentLoaded', () => {
   const editDropdown = document.getElementById('edit-dropdown');
   const btnAnalysis = document.getElementById('btn-analysis');
   const analysisDropdown = document.getElementById('analysis-dropdown');
+  const btnBasemap = document.getElementById('btn-basemap');
+  const basemapDropdown = document.getElementById('basemap-dropdown');
   const btnPrint = document.getElementById('btn-print');
   const dialogPrintSettings = document.getElementById('dialog-print-settings');
+  const dialogArcgisRest = document.getElementById('dialog-arcgis-rest');
   const dialogBuffer = document.getElementById('dialog-buffer');
   const dialogSpatialRelationships = document.getElementById('dialog-spatial-relationships');
   const bufferDistanceInput = document.getElementById('buffer-distance');
@@ -2303,7 +2624,7 @@ window.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       e.stopPropagation();
       // Close other dropdowns
-      [connectDropdown, navigateDropdown, selectDropdown, editDropdown, analysisDropdown].forEach(d => {
+      [connectDropdown, navigateDropdown, selectDropdown, editDropdown, analysisDropdown, basemapDropdown].forEach(d => {
         if (d && d !== menu) d.style.display = 'none';
       });
       menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
@@ -2318,6 +2639,8 @@ window.addEventListener('DOMContentLoaded', () => {
   wireDropdown(btnSelect, selectDropdown, '#select-menu');
   wireDropdown(btnEdit, editDropdown, '#edit-menu');
   wireDropdown(btnAnalysis, analysisDropdown, '#analysis-menu');
+  wireDropdown(btnBasemap, basemapDropdown, '#basemap-menu');
+  renderBasemapDropdown();
 
   // Connect menu items
   if (connectDropdown) {
@@ -2326,7 +2649,14 @@ window.addEventListener('DOMContentLoaded', () => {
         e.preventDefault(); e.stopPropagation();
         const connType = item.dataset.conn;
         connectDropdown.style.display = 'none';
-        const dialogMap = { 'file':'dialog-file','duckdb':'dialog-duckdb','snowflake':'dialog-snowflake','databricks':'dialog-databricks','iceberg':'dialog-iceberg' };
+        const dialogMap = {
+          'file': 'dialog-file',
+          'arcgis-rest': 'dialog-arcgis-rest',
+          'duckdb': 'dialog-duckdb',
+          'snowflake': 'dialog-snowflake',
+          'databricks': 'dialog-databricks',
+          'iceberg': 'dialog-iceberg'
+        };
         showModal(dialogMap[connType]);
       });
     });
@@ -3844,7 +4174,13 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function refreshAttributesForEntry(entry) {
-    if (!entry || !entry.geojson) return;
+    if (!entry || !entry.geojson) {
+      const tbody = document.getElementById('attr-tbody');
+      const thead = document.getElementById('attr-thead');
+      if (tbody) tbody.innerHTML = '';
+      if (thead) thead.innerHTML = '';
+      return;
+    }
     lastGeoJSONLoaded = entry.geojson;
     currentGeoJsonLayer = entry.layer;
     renderAttributeTable(entry);
@@ -4260,18 +4596,29 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // File dialog handlers
   let selectedFileContent = null; // Store file content when browsing
+  let selectedFilePayload = null;
+
+  function resetFileDialogState() {
+    selectedFileContent = null;
+    selectedFilePayload = null;
+    document.getElementById('dialog-file-path').value = '';
+    document.getElementById('dialog-file-layer-name').value = '';
+    document.getElementById('dialog-file-crs').value = 'EPSG:4326';
+    document.getElementById('dialog-file-swap-coords').checked = false;
+  }
   
   const fileBrowseBtn = document.getElementById('dialog-file-browse');
   if (fileBrowseBtn) {
     fileBrowseBtn.addEventListener('click', async () => {
-      const res = await electronAPI.openGeoJSON();
+      const res = await window.electronAPI.openSpatialFile();
       if (res && res.path && res.content) {
         document.getElementById('dialog-file-path').value = res.path;
         const preferredNameInput = document.getElementById('dialog-file-layer-name');
         if (preferredNameInput && !preferredNameInput.value.trim()) {
           preferredNameInput.value = getFileBaseName(res.path);
         }
-        selectedFileContent = res.content; // Store the content
+        selectedFileContent = res.content;
+        selectedFilePayload = res;
       }
     });
   }
@@ -4294,7 +4641,12 @@ window.addEventListener('DOMContentLoaded', () => {
       }
       
       try {
-        const parsed = JSON.parse(selectedFileContent);
+        const loadedFile = await parseSpatialFilePayload(selectedFilePayload || {
+          path: filePath,
+          content: selectedFileContent,
+          extension: filePath.slice(filePath.lastIndexOf('.')).toLowerCase(),
+        });
+        const parsed = loadedFile.geojson;
         const preferredName = (document.getElementById('dialog-file-layer-name').value || '').trim();
         const finalLayerName = preferredName || getFileBaseName(filePath);
         
@@ -4309,8 +4661,8 @@ window.addEventListener('DOMContentLoaded', () => {
         
         hideModal('dialog-file');
         lastGeoJSONLoaded = parsed;
-        lastGeoJSONSourceCRS = selectedCRS;
-        const transformed = reprojectGeoJSON(parsed, selectedCRS, 'EPSG:3857', swapCoords);
+        lastGeoJSONSourceCRS = loadedFile.sourceCrs || selectedCRS;
+        const transformed = reprojectGeoJSON(parsed, loadedFile.sourceCrs || selectedCRS, 'EPSG:3857', swapCoords);
         
         // Log transformed coordinates for debugging
         if (transformed.features && transformed.features.length > 0) {
@@ -4320,16 +4672,13 @@ window.addEventListener('DOMContentLoaded', () => {
           }
         }
         
-        addGeoJSONLayer(transformed, finalLayerName, { sourcePath: filePath });
+        addGeoJSONLayer(transformed, finalLayerName, { sourcePath: loadedFile.sourcePath || filePath });
         
         // Log for debugging
         console.log('File loaded:', { filePath, crs: selectedCRS, swapCoords, numFeatures: parsed.features?.length || 0 });
         
         // Reset for next use
-        selectedFileContent = null;
-        document.getElementById('dialog-file-path').value = '';
-        document.getElementById('dialog-file-layer-name').value = '';
-        document.getElementById('dialog-file-swap-coords').checked = false;
+        resetFileDialogState();
       } catch (err) {
         alert('Failed to load file: ' + err.message);
         console.error('File loading error:', err);
@@ -4341,10 +4690,54 @@ window.addEventListener('DOMContentLoaded', () => {
   if (fileCancelBtn) {
     fileCancelBtn.addEventListener('click', () => {
       hideModal('dialog-file');
-      selectedFileContent = null;
-      document.getElementById('dialog-file-path').value = '';
-      document.getElementById('dialog-file-layer-name').value = '';
-      document.getElementById('dialog-file-crs').value = 'EPSG:4326';
+      resetFileDialogState();
+    });
+  }
+
+  function resetArcGISRestDialog() {
+    document.getElementById('dialog-arcgis-rest-url').value = '';
+    document.getElementById('dialog-arcgis-rest-layer-name').value = '';
+  }
+
+  const arcgisRestOkBtn = document.getElementById('dialog-arcgis-rest-ok');
+  if (arcgisRestOkBtn) {
+    arcgisRestOkBtn.addEventListener('click', async () => {
+      const layerUrl = (document.getElementById('dialog-arcgis-rest-url').value || '').trim();
+      const preferredName = (document.getElementById('dialog-arcgis-rest-layer-name').value || '').trim();
+      if (!layerUrl) {
+        alert('Enter an ArcGIS REST layer URL.');
+        return;
+      }
+      try {
+        await addArcGISRestServiceLayer(layerUrl, { name: preferredName || undefined });
+        hideModal('dialog-arcgis-rest');
+        lastGeoJSONLoaded = null;
+        lastGeoJSONSourceCRS = null;
+        resetArcGISRestDialog();
+      } catch (err) {
+        const hasVisibleServiceLayer = layers.some((layerEntry) =>
+          layerEntry
+          && layerEntry.sourceType === 'arcgis-rest'
+          && layerEntry.sourcePath
+          && normalizeArcGISRestLayerUrl(layerEntry.sourcePath) === normalizeArcGISRestLayerUrl(layerUrl)
+        );
+        if (hasVisibleServiceLayer) {
+          hideModal('dialog-arcgis-rest');
+          resetArcGISRestDialog();
+          console.warn('ArcGIS REST layer added with a non-fatal post-load issue:', err);
+          return;
+        }
+        alert('Failed to load ArcGIS REST service: ' + err.message);
+        console.error('ArcGIS REST loading error:', err);
+      }
+    });
+  }
+
+  const arcgisRestCancelBtn = document.getElementById('dialog-arcgis-rest-cancel');
+  if (arcgisRestCancelBtn) {
+    arcgisRestCancelBtn.addEventListener('click', () => {
+      hideModal('dialog-arcgis-rest');
+      resetArcGISRestDialog();
     });
   }
 

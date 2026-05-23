@@ -25,6 +25,7 @@
               <button class="dropdown-item" data-conn="snowflake">❄️ Snowflake</button>
               <button class="dropdown-item" data-conn="databricks">🧱 Databricks</button>
               <button class="dropdown-item" data-conn="iceberg">🗻 Apache Iceberg</button>
+              <button class="dropdown-item" data-conn="arcgis-rest">ArcGIS REST Service</button>
             </div>
           </div>
 
@@ -89,6 +90,13 @@
               <span class="dropdown-group-title">Layer Operations</span>
               <button class="dropdown-item" data-layer-action="draworder">Set Draw Order</button>
             </div>
+          </div>
+
+          <div id="basemap-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-basemap" title="Change Basemap">
+              Basemap: <span id="selected-basemap-label">OpenStreetMap</span>
+            </button>
+            <div id="basemap-dropdown" class="dropdown-menu basemap-dropdown" style="display:none;"></div>
           </div>
 
           <button class="toolbar-btn" id="btn-print" title="Print Map">🖨️ Print</button>
@@ -385,9 +393,10 @@
       <div id="modal-overlay" class="modal-overlay"></div>
       <div id="dialog-file" class="connection-dialog modal-hidden">
         <div class="dialog-content">
-          <h3>Open GeoJSON File</h3>
+          <h3>Open Spatial File</h3>
           <input id="dialog-file-path" placeholder="File path (optional)" style="width:100%;margin:10px 0;" />
           <button id="dialog-file-browse">Browse...</button>
+          <div style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Supported formats: GeoJSON, zipped shapefile (.zip), or shapefile (.shp with sidecars).</div>
           <label style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Preferred Layer Name (optional):</label>
           <input id="dialog-file-layer-name" placeholder="If blank, file name will be used" style="width:100%;margin:10px 0;" />
           <label style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Source Coordinate System:</label>
@@ -406,6 +415,21 @@
           <div style="margin-top:20px;">
             <button id="dialog-file-ok">OK</button>
             <button id="dialog-file-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dialog-arcgis-rest" class="connection-dialog modal-hidden">
+        <div class="dialog-content">
+          <h3>ArcGIS REST Service</h3>
+          <label>Layer URL:</label>
+          <input id="dialog-arcgis-rest-url" placeholder="https://.../FeatureServer/0" style="width:100%;margin:10px 0;" />
+          <label>Preferred Layer Name (optional):</label>
+          <input id="dialog-arcgis-rest-layer-name" placeholder="If blank, service name will be used" style="width:100%;margin:10px 0;" />
+          <div style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Use a layer endpoint such as .../FeatureServer/0 or .../MapServer/2.</div>
+          <div style="margin-top:20px;">
+            <button id="dialog-arcgis-rest-ok">Connect</button>
+            <button id="dialog-arcgis-rest-cancel">Cancel</button>
           </div>
         </div>
       </div>
@@ -473,6 +497,21 @@
           </div>
         </div>
       </div>
+
+      <button id="map-chat-fab" class="map-chat-fab" title="Map Assistant">AI</button>
+      <div id="map-chat-panel" class="map-chat-panel" aria-hidden="true">
+        <div class="map-chat-header">
+          <strong>Map Assistant</strong>
+          <button id="map-chat-close" class="map-chat-close" title="Close">x</button>
+        </div>
+        <div id="map-chat-messages" class="map-chat-messages">
+          <div class="map-chat-msg assistant">Ask questions about loaded layers, selected features, and map extent.</div>
+        </div>
+        <form id="map-chat-form" class="map-chat-form">
+          <input id="map-chat-input" type="text" placeholder="Ask about the current map..." autocomplete="off" />
+          <button id="map-chat-send" type="submit">Send</button>
+        </form>
+      </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -480,6 +519,8 @@
     <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
     <script src="https://unpkg.com/proj4leaflet@1.0.2/src/proj4leaflet.js"></script>
     <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <script src="https://unpkg.com/esri-leaflet@3.0.14/dist/esri-leaflet.js"></script>
+    <script src="https://unpkg.com/shpjs@6.2.0/dist/shp.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>
