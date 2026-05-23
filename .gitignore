@@ -27,3 +27,9 @@ Thumbs.db
 *.orig
 *.rej
 *.swp
+
+# Local environment secrets
+.env
+.env.*
+electron-app/.env
+electron-app/.env.*

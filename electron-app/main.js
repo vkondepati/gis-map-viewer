@@ -282,12 +282,42 @@ ipcMain.handle('dialog:openFile', async () => {
     properties: ['openFile'],
     filters: [
       { name: 'GeoJSON', extensions: ['geojson', 'json'] },
+      { name: 'Shapefile', extensions: ['zip', 'shp'] },
       { name: 'All Files', extensions: ['*'] },
     ],
   });
   if (canceled || !filePaths || filePaths.length === 0) return { canceled: true };
-  const content = fs.readFileSync(filePaths[0], 'utf8');
-  return { canceled: false, path: filePaths[0], content };
+  const targetPath = filePaths[0];
+  const extension = path.extname(targetPath).toLowerCase();
+  const isTextFile = ['.geojson', '.json', '.prj', '.cpg', '.txt', '.xml'].includes(extension);
+  const content = isTextFile
+    ? fs.readFileSync(targetPath, 'utf8')
+    : fs.readFileSync(targetPath).toString('base64');
+  const response = {
+    canceled: false,
+    path: targetPath,
+    content,
+    extension,
+    encoding: isTextFile ? 'utf8' : 'base64',
+  };
+  if (extension === '.shp') {
+    const parsed = path.parse(targetPath);
+    const relatedFiles = {};
+    ['.dbf', '.prj', '.cpg', '.shx'].forEach((sidecarExt) => {
+      const sidecarPath = path.join(parsed.dir, `${parsed.name}${sidecarExt}`);
+      if (!fs.existsSync(sidecarPath)) return;
+      const sidecarIsText = ['.prj', '.cpg'].includes(sidecarExt);
+      relatedFiles[sidecarExt.slice(1)] = {
+        path: sidecarPath,
+        encoding: sidecarIsText ? 'utf8' : 'base64',
+        content: sidecarIsText
+          ? fs.readFileSync(sidecarPath, 'utf8')
+          : fs.readFileSync(sidecarPath).toString('base64'),
+      };
+    });
+    response.relatedFiles = relatedFiles;
+  }
+  return response;
 });
 
 ipcMain.handle('dialog:saveFile', async (event, { defaultName, content }) => {

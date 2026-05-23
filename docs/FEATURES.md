@@ -10,6 +10,7 @@ Comprehensive documentation of all Desktop GIS Map Viewer features.
 - [Identifying and Selecting Features](#identifying-and-selecting-features)
 - [Spatial Analysis](#spatial-analysis)
 - [Feature Editing](#feature-editing)
+- [AI Map Assistant](#ai-map-assistant)
 
 ## Map Navigation
 
@@ -218,6 +219,36 @@ Multiple ways to select features.
 2. Click and drag to define area
 3. All features in rectangle select
 4. Selected features highlight
+
+## AI Map Assistant
+
+Ask map questions in natural language from the floating `AI` button at the bottom-right of the app.
+
+- Answers are based on map state sent from the renderer:
+  - Loaded layers
+  - Active layer
+  - Selected feature count
+  - Map extent and zoom
+  - Sample attribute columns/values
+- The OpenAI API key is read only from environment variables in the Electron main process.
+- Credentials are never stored in source files.
+
+### Setup
+
+Windows PowerShell example before starting app:
+
+```powershell
+$env:OPENAI_API_KEY="your_key_here"
+$env:OPENAI_MODEL="gpt-4o-mini"
+npm start
+```
+
+Or create `electron-app/.env` (not committed) from `electron-app/.env.example`:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
+```
 
 #### Polygon Selection
 
