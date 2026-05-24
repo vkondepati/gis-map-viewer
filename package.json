@@ -5,6 +5,9 @@
   "scripts": {
     "start": "npm start --prefix electron-app",
     "dev": "npm run dev --prefix electron-app",
+    "web": "npm run dev --prefix web-app",
+    "web:build": "npm run build --prefix web-app",
+    "api": "npm start --prefix server-api",
     "test": "node --test tests/*.test.js"
   }
 }

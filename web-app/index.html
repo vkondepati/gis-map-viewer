@@ -1,0 +1,242 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>NexaMap Web</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/electron-app/renderer/styles.css" />
+    <script>
+      window.__NEXAMAP_WEB_CONFIG__ = {
+        apiBaseUrl: '/api'
+      };
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <header id="toolbar">
+        <div id="toolbar-left">
+          <h1 style="margin:0;font-size:24px;font-weight:bold;color:#fff;letter-spacing:1px">
+            NexaMap <span id="project-title-name" style="font-size:14px;font-weight:400;color:#99c2dd;"></span>
+          </h1>
+        </div>
+        <div id="auth-logged-in" class="auth-toolbar-state" style="display:none;">
+          <img id="auth-user-avatar" alt="" class="auth-user-avatar" style="display:none;" />
+          <div class="auth-user-copy">
+            <strong id="auth-user-name"></strong>
+            <span id="auth-user-email"></span>
+          </div>
+          <button class="toolbar-btn" id="auth-logout-btn" title="Sign out">Logout</button>
+        </div>
+        <div id="auth-logged-out" class="auth-toolbar-state">
+          <button class="toolbar-btn" id="auth-open-login" title="Sign in">Login</button>
+          <button class="toolbar-btn" id="auth-open-register" title="Create account">Register</button>
+        </div>
+        <div id="toolbar-buttons">
+          <div id="project-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-project" title="Project file actions">Project</button>
+            <div id="project-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-project-action="create-project">New Project</button>
+              <button class="dropdown-item" data-project-action="open-project">Open Project</button>
+              <div class="dropdown-sep"></div>
+              <button class="dropdown-item" data-project-action="save-project">Save Project</button>
+              <button class="dropdown-item" data-project-action="save-project-as">Save Project As</button>
+              <div class="dropdown-sep"></div>
+              <button class="dropdown-item" data-project-action="close-project">Close Project</button>
+            </div>
+          </div>
+
+          <div id="connect-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-connect" title="Connect Data">Connect</button>
+            <div id="connect-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-conn="file">Open File</button>
+              <button class="dropdown-item" data-conn="duckdb">DuckDB</button>
+              <button class="dropdown-item" data-conn="snowflake">Snowflake</button>
+              <button class="dropdown-item" data-conn="databricks">Databricks</button>
+              <button class="dropdown-item" data-conn="iceberg">Apache Iceberg</button>
+              <button class="dropdown-item" data-conn="arcgis-rest">ArcGIS REST Service</button>
+            </div>
+          </div>
+
+          <div id="navigate-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-navigate" title="Navigation Tools">Navigate</button>
+            <div id="navigate-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="nav-zoomin">Zoom In</button>
+              <button class="dropdown-item" data-tool="nav-zoomout">Zoom Out</button>
+              <button class="dropdown-item" data-tool="nav-pan">Pan</button>
+              <button class="dropdown-item" data-tool="nav-zoomselect">Zoom to Select</button>
+            </div>
+          </div>
+
+          <div id="select-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-select" title="Selection Tools">Select</button>
+            <div id="select-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="select-click">By Click</button>
+              <button class="dropdown-item" data-tool="select-rect">Rectangle</button>
+              <button class="dropdown-item" data-tool="select-poly">By Polygon</button>
+              <button class="dropdown-item" data-tool="select-line">By Line</button>
+              <button class="dropdown-item" data-tool="select-clear">Clear Selection</button>
+            </div>
+          </div>
+
+          <div id="edit-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-edit" title="Edit Tools">Edit</button>
+            <div id="edit-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="edit-start">Start Editing</button>
+              <button class="dropdown-item" data-tool="edit-stop">Stop Editing</button>
+              <div class="dropdown-sep"></div>
+              <button class="dropdown-item" data-tool="edit-add">Add Feature</button>
+              <button class="dropdown-item" data-tool="edit-modify">Modify Feature</button>
+              <button class="dropdown-item" data-tool="edit-delete">Delete Feature</button>
+              <button class="dropdown-item" data-tool="edit-save">Save Edits</button>
+              <button class="dropdown-item" data-tool="edit-undo">Undo</button>
+              <button class="dropdown-item" data-tool="edit-redo">Redo</button>
+              <button class="dropdown-item" data-tool="open-attributes">Open Attributes</button>
+              <button class="dropdown-item" data-tool="update-attributes">Update Attributes</button>
+            </div>
+          </div>
+
+          <div id="analysis-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-analysis" title="Analysis Tools">Analysis</button>
+            <div id="analysis-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-tool="buffer">Buffer</button>
+              <button class="dropdown-item" data-tool="spatial-relationships">Spatial Relationships</button>
+            </div>
+          </div>
+
+          <div id="layers-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-layers" title="Layer Tools">Layers</button>
+            <div id="layers-dropdown" class="dropdown-menu" style="display:none;">
+              <button class="dropdown-item" data-layer-action="create">Create Layer</button>
+              <button class="dropdown-item" data-layer-action="save">Save Layers</button>
+              <button class="dropdown-item" data-layer-action="load">Load Layers</button>
+              <div class="dropdown-sep"></div>
+              <span class="dropdown-group-title">Layer Operations</span>
+              <button class="dropdown-item" data-layer-action="draworder">Set Draw Order</button>
+            </div>
+          </div>
+
+          <div id="basemap-menu" style="position:relative;display:inline-block;">
+            <button class="toolbar-btn" id="btn-basemap" title="Change Basemap">
+              Basemap: <span id="selected-basemap-label">OpenStreetMap</span>
+            </button>
+            <div id="basemap-dropdown" class="dropdown-menu basemap-dropdown" style="display:none;"></div>
+          </div>
+
+          <button class="toolbar-btn" id="btn-print" title="Print Map">Print</button>
+        </div>
+      </header>
+      <div id="app-content">
+      <aside id="sidebar">
+        <div class="section">
+          <div class="section-header">
+            <h3>Table of Contents</h3>
+            <button class="toggle-btn" data-section="layers">-</button>
+          </div>
+          <div id="layers" class="section-content">
+            <ul id="layer-list" class="toc-list"></ul>
+            <div id="selection-status" class="selection-status">Active layer selection: 0 feature(s)</div>
+          </div>
+        </div>
+        <div id="file-ops-panel" class="file-ops-panel">
+          <div class="file-ops-header">File Operations</div>
+          <div class="file-ops-row">
+            <button id="file-ops-pick-folder">Select Folder</button>
+            <button id="file-ops-refresh">Refresh</button>
+          </div>
+          <input id="file-ops-folder-path" placeholder="No folder selected" readonly />
+          <div class="file-ops-row">
+            <select id="file-ops-create-type">
+              <option value="folder">Create Folder</option>
+              <option value="geojson">Create GeoJSON</option>
+              <option value="kml">Create KML</option>
+              <option value="attributes">Create Attributes File</option>
+            </select>
+          </div>
+          <input id="file-ops-name" placeholder="Name" />
+          <label id="file-ops-attrs-wrap" style="display:none;align-items:center;gap:6px;font-size:12px;color:#fff;">
+            <input id="file-ops-with-attrs" type="checkbox" style="width:auto;" checked />
+            Include sample attributes
+          </label>
+          <div class="file-ops-row">
+            <button id="file-ops-create">Create</button>
+            <button id="file-ops-delete">Delete Selected</button>
+          </div>
+          <div id="file-ops-list" class="file-ops-list"></div>
+        </div>
+      </aside>
+      <div id="layer-context-menu" class="context-menu" style="display:none;">
+        <div id="label-options-container"></div>
+      </div>
+      <main id="map-container">
+        <div id="map"></div>
+        <div id="attributes-panel" class="bottom-panel collapsed">
+          <div class="panel-header">
+            <h3>Attributes</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#fff;">
+                <input id="attr-selected-only" type="checkbox" style="width:auto;" />
+                Selected Only
+              </label>
+              <button id="export-btn" style="padding:4px 8px;font-size:12px">Export CSV</button>
+              <button id="bi-report-btn" style="padding:4px 8px;font-size:12px">BI Reports</button>
+              <button id="print-attr-btn" style="padding:4px 8px;font-size:12px">Print Table</button>
+              <button id="apply-attr-btn" style="padding:4px 8px;font-size:12px">Apply Edits</button>
+              <button id="close-attr-btn" style="padding:4px 8px;font-size:12px">Close</button>
+              <button class="toggle-btn" data-section="attributes-panel">+</button>
+            </div>
+          </div>
+          <div id="attributes" class="panel-content">
+            <div id="attribute-table" style="display:none">
+              <table id="attr-table"><thead id="attr-thead"></thead><tbody id="attr-tbody"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </main>
+      </div>
+
+      <div id="dialog-create-layer" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Create New Layer</h3><label>Layer Name:</label><input id="create-layer-name" placeholder="Layer name" /><label>Geometry Type:</label><select id="create-layer-geometry"><option value="Point">Point</option><option value="LineString">LineString</option><option value="Polygon">Polygon</option></select><div style="margin-top:20px;"><button id="create-layer-ok">Create</button><button id="create-layer-cancel">Cancel</button></div></div></div>
+      <div id="dialog-auth" class="connection-dialog modal-hidden"><div class="dialog-content auth-dialog-content"><h3 id="auth-dialog-title">Sign In</h3><div class="auth-social-row"><button id="auth-google-btn" type="button">Continue with Google</button><button id="auth-linkedin-btn" type="button">Continue with LinkedIn</button></div><div class="auth-divider"><span>or use email and password</span></div><form id="auth-form"><div id="auth-name-row"><label>Name:</label><input id="auth-name-input" placeholder="Your name" /></div><div id="auth-username-row"><label>Username:</label><input id="auth-username-input" placeholder="username" /></div><label id="auth-email-label">Email or Username:</label><input id="auth-email-input" placeholder="name@example.com or username" /><label>Password:</label><input id="auth-password-input" type="password" placeholder="At least 8 characters" /><div id="auth-message" class="auth-message"></div><div style="margin-top:20px;"><button id="auth-submit-btn" type="submit">Sign In</button><button id="auth-cancel-btn" type="button">Cancel</button></div><button id="auth-switch-mode-btn" class="auth-switch-btn" type="button">Need an account? Register</button></form></div></div>
+      <div id="dialog-rename-layer" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Rename Layer</h3><input id="rename-layer-name" placeholder="New layer name" /><div style="margin-top:20px;"><button id="rename-layer-ok">Rename</button><button id="rename-layer-cancel">Cancel</button></div></div></div>
+      <div id="dialog-draworder" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Set Draw Order</h3><ul id="draworder-list" style="list-style:none;padding:0;margin:0;"></ul><div style="margin-top:20px;"><button id="draworder-ok">Apply</button><button id="draworder-cancel">Cancel</button></div></div></div>
+      <div id="dialog-label-settings" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Label Settings</h3><label>Field:</label><select id="label-field-select"></select><label>Font Size (px):</label><input id="label-font-size" type="number" min="8" max="48" step="1" value="12" /><label>Font Color:</label><input id="label-font-color" type="color" value="#111111" /><label>Placement:</label><select id="label-placement"><option value="center">Center</option><option value="above">Above</option><option value="below">Below</option><option value="left">Left</option><option value="right">Right</option></select><div style="margin-top:20px;"><button id="label-settings-ok">Apply</button><button id="label-settings-cancel">Cancel</button></div></div></div>
+      <div id="dialog-add-feature-attrs" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Feature Attributes</h3><div id="add-feature-attrs-container"></div><label>Extra Attributes (JSON object, optional):</label><textarea id="add-feature-attrs-json" style="width:100%;min-height:80px;box-sizing:border-box;" placeholder='{"key":"value"}'></textarea><div style="margin-top:20px;"><button id="add-feature-attrs-ok">Save Feature</button><button id="add-feature-attrs-cancel">Cancel</button></div></div></div>
+      <div id="dialog-buffer" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Buffer Analysis</h3><label>Buffer Value:</label><input id="buffer-distance" type="number" min="0" step="any" value="100" placeholder="Distance value" /><label>Buffer Units:</label><select id="buffer-units"><option value="meters">Meters</option><option value="kilometers">Kilometers</option><option value="miles">Miles</option><option value="feet">Feet</option></select><div style="margin-top:20px;"><button id="buffer-ok">Run Buffer</button><button id="buffer-cancel">Cancel</button></div></div></div>
+      <div id="dialog-spatial-relationships" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Spatial Relationships</h3><label>Source Polygon Layer:</label><select id="spatial-source-layer" style="width:100%;margin:10px 0;"></select><label>Target Layer:</label><select id="spatial-target-layer" style="width:100%;margin:10px 0;"></select><label>Relationship Type:</label><select id="spatial-relationship-type" style="width:100%;margin:10px 0;"><option value="intersects">Intersect</option><option value="contains">Contains</option><option value="within">Within</option><option value="touches">Touches</option><option value="shared-boundary">Sharing Same Boundary/Edges</option></select><label>Source Features:</label><select id="spatial-source-scope" style="width:100%;margin:10px 0;"><option value="all">All</option><option value="selected">Selected</option></select><label>Target Attributes to Include:</label><div id="spatial-target-attrs" style="max-height:140px;overflow:auto;border:1px solid #444;border-radius:4px;padding:8px;margin:10px 0;background:#1f2a38;"></div><label>Result Layer Name (optional):</label><input id="spatial-result-layer-name" placeholder="If blank, generated automatically" style="width:100%;margin:10px 0;" /><div style="margin-top:20px;"><button id="spatial-relationships-ok">Run Query</button><button id="spatial-relationships-cancel">Cancel</button></div></div></div>
+      <div id="dialog-print-settings" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Print / PDF Settings</h3><label>Map Title:</label><input id="print-title" placeholder="Map export" value="Map Export" /><label>Paper Size:</label><select id="print-page-size"><option value="A4">A4</option><option value="Letter">Letter</option></select><label>Orientation:</label><select id="print-orientation"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select><label style="display:flex;align-items:center;gap:8px;margin:8px 0;"><input id="print-include-legend" type="checkbox" style="width:auto;" checked />Include Legend</label><label style="display:flex;align-items:center;gap:8px;margin:8px 0;"><input id="print-include-north-arrow" type="checkbox" style="width:auto;" checked />Include North Arrow</label><label style="display:flex;align-items:center;gap:8px;margin:8px 0;"><input id="print-include-scale-bar" type="checkbox" style="width:auto;" checked />Include Scale Bar</label><label style="display:flex;align-items:center;gap:8px;margin:8px 0;"><input id="print-include-attr-table" type="checkbox" style="width:auto;" />Include Attribute Table (Current Extent)</label><div style="margin-top:20px;"><button id="print-settings-ok">Generate PDF</button><button id="print-settings-cancel">Cancel</button></div></div></div>
+      <div id="dialog-bi-report" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>BI Reports</h3><label>Chart Type:</label><select id="bi-chart-type"><option value="bar">Bar</option><option value="line">Line</option><option value="pie">Pie</option></select><label>Category Column:</label><select id="bi-category-column"></select><label>Value Column:</label><select id="bi-value-column"><option value="__count__">Count of Records</option></select><div style="margin-top:12px;display:flex;gap:8px;"><button id="bi-generate-btn">Generate Chart</button><button id="bi-close-btn">Close</button></div><div id="bi-chart-output" style="margin-top:12px;background:#072034;border:1px solid #366b94;border-radius:4px;padding:10px;min-height:220px;overflow:auto;"></div></div></div>
+      <div id="dialog-file-create" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Create File</h3><label>File Location:</label><div style="display:flex;gap:8px;"><input id="create-file-location" placeholder="Select folder" readonly /><button id="create-file-location-browse" style="margin-top:0;">Browse</button></div><label>File Name:</label><input id="create-file-name" placeholder="File name" /><label>List of Columns:</label><div id="create-file-columns" style="max-height:130px;overflow:auto;border:1px solid #366b94;border-radius:4px;padding:8px;background:#072034;"></div><div style="margin-top:8px;"><button id="create-file-add-column" style="margin-top:0;">Add Column</button></div><label>Target Coordinate System:</label><select id="create-file-crs"><option value="EPSG:4326">EPSG:4326 (WGS 84)</option><option value="EPSG:3857">EPSG:3857 (Web Mercator)</option><option value="EPSG:32633">EPSG:32633 (UTM Zone 33N)</option><option value="EPSG:2154">EPSG:2154 (Lambert 93)</option></select><div style="margin-top:20px;"><button id="create-file-save">Save</button><button id="create-file-cancel">Cancel</button></div></div></div>
+      <div id="modal-overlay" class="modal-overlay"></div>
+      <div id="dialog-file" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Open Spatial File</h3><input id="dialog-file-path" placeholder="File path (optional)" style="width:100%;margin:10px 0;" /><button id="dialog-file-browse">Browse...</button><div style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Supported formats: GeoJSON, zipped shapefile (.zip), or shapefile (.shp with sidecars).</div><label style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Preferred Layer Name (optional):</label><input id="dialog-file-layer-name" placeholder="If blank, file name will be used" style="width:100%;margin:10px 0;" /><label style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Source Coordinate System:</label><select id="dialog-file-crs" style="width:100%;margin:10px 0;"><option value="EPSG:3857">EPSG:3857 (Web Mercator - Default)</option><option value="EPSG:4326">EPSG:4326 (WGS 84 - Lon/Lat)</option><option value="EPSG:4326-latlon">EPSG:4326 Axis Order (Lat/Lon)</option><option value="EPSG:2154">EPSG:2154 (French Lambert 93)</option><option value="EPSG:32633">EPSG:32633 (UTM Zone 33N)</option><option value="EPSG:25832">EPSG:25832 (ETRS89 UTM 32N)</option></select><label style="font-size:12px;color:#ccc;display:flex;align-items:center;gap:8px;margin:12px 0;"><input id="dialog-file-swap-coords" type="checkbox" style="width:auto;" />Swap coordinates (if points appear in wrong location)</label><div style="margin-top:20px;"><button id="dialog-file-ok">OK</button><button id="dialog-file-cancel">Cancel</button></div></div></div>
+      <div id="dialog-arcgis-rest" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>ArcGIS REST Service</h3><label>Layer URL:</label><input id="dialog-arcgis-rest-url" placeholder="https://.../FeatureServer/0" style="width:100%;margin:10px 0;" /><label>Preferred Layer Name (optional):</label><input id="dialog-arcgis-rest-layer-name" placeholder="If blank, service name will be used" style="width:100%;margin:10px 0;" /><div style="font-size:12px;color:#ccc;display:block;margin:12px 0 4px;">Use a layer endpoint such as .../FeatureServer/0 or .../MapServer/2.</div><div style="margin-top:20px;"><button id="dialog-arcgis-rest-ok">Connect</button><button id="dialog-arcgis-rest-cancel">Cancel</button></div></div></div>
+      <div id="dialog-duckdb" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>DuckDB Connection</h3><input id="dialog-duckdb-path" placeholder="Database path / :memory:" style="width:100%;margin:10px 0;" /><select id="dialog-duckdb-crs" style="width:100%;margin:10px 0;"><option value="EPSG:3857">EPSG:3857 (WebMercator)</option><option value="EPSG:4326">EPSG:4326 (WGS 84)</option></select><div style="margin-top:20px;"><button id="dialog-duckdb-ok">Connect</button><button id="dialog-duckdb-cancel">Cancel</button></div></div></div>
+      <div id="dialog-snowflake" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Snowflake Connection</h3><input id="dialog-snowflake-account" placeholder="Account" style="width:100%;margin:10px 0;" /><input id="dialog-snowflake-user" placeholder="User" style="width:100%;margin:10px 0;" /><input id="dialog-snowflake-password" type="password" placeholder="Password" style="width:100%;margin:10px 0;" /><select id="dialog-snowflake-crs" style="width:100%;margin:10px 0;"><option value="EPSG:3857">EPSG:3857 (WebMercator)</option><option value="EPSG:4326">EPSG:4326 (WGS 84)</option></select><div style="margin-top:20px;"><button id="dialog-snowflake-ok">Connect</button><button id="dialog-snowflake-cancel">Cancel</button></div></div></div>
+      <div id="dialog-databricks" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Databricks Connection</h3><input id="dialog-databricks-host" placeholder="Host / Workspace" style="width:100%;margin:10px 0;" /><input id="dialog-databricks-token" placeholder="Token" style="width:100%;margin:10px 0;" /><select id="dialog-databricks-crs" style="width:100%;margin:10px 0;"><option value="EPSG:3857">EPSG:3857 (WebMercator)</option><option value="EPSG:4326">EPSG:4326 (WGS 84)</option></select><div style="margin-top:20px;"><button id="dialog-databricks-ok">Connect</button><button id="dialog-databricks-cancel">Cancel</button></div></div></div>
+      <div id="dialog-iceberg" class="connection-dialog modal-hidden"><div class="dialog-content"><h3>Apache Iceberg Connection</h3><input id="dialog-iceberg-warehouse" placeholder="Warehouse path" style="width:100%;margin:10px 0;" /><input id="dialog-iceberg-catalog" placeholder="Catalog name" style="width:100%;margin:10px 0;" /><select id="dialog-iceberg-crs" style="width:100%;margin:10px 0;"><option value="EPSG:3857">EPSG:3857 (WebMercator)</option><option value="EPSG:4326">EPSG:4326 (WGS 84)</option></select><div style="margin-top:20px;"><button id="dialog-iceberg-ok">Connect</button><button id="dialog-iceberg-cancel">Cancel</button></div></div></div>
+      <button id="map-chat-fab" class="map-chat-fab" title="Map Assistant">AI</button>
+      <div id="map-chat-panel" class="map-chat-panel" aria-hidden="true"><div class="map-chat-header"><strong>Map Assistant</strong><button id="map-chat-close" class="map-chat-close" title="Close">x</button></div><div id="map-chat-messages" class="map-chat-messages"><div class="map-chat-msg assistant">Ask questions about loaded layers, selected features, and map extent.</div></div><form id="map-chat-form" class="map-chat-form"><input id="map-chat-input" type="text" placeholder="Ask about the current map..." autocomplete="off" /><button id="map-chat-send" type="submit">Send</button></form></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
+    <script src="https://unpkg.com/proj4leaflet@1.0.2/src/proj4leaflet.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    <script src="https://unpkg.com/esri-leaflet@3.0.14/dist/esri-leaflet.js"></script>
+    <script src="https://unpkg.com/shpjs@6.2.0/dist/shp.js"></script>
+    <script src="/shared/platform/platform-types.js"></script>
+    <script src="/shared/platform/desktop-platform.js"></script>
+    <script src="/shared/platform/web-platform.js"></script>
+    <script src="/shared/core/app-state.js"></script>
+    <script src="/shared/core/map-runtime.js"></script>
+    <script src="/shared/core/file-import.js"></script>
+    <script src="/shared/core/project-io.js"></script>
+    <script src="/shared/core/attributes.js"></script>
+    <script src="/shared/core/editing.js"></script>
+    <script src="/shared/core/analysis.js"></script>
+    <script src="/shared/core/chat.js"></script>
+    <script src="/shared/ui/dialogs.js"></script>
+    <script src="/electron-app/renderer/renderer.js"></script>
+    <script src="/web-app/auth.js"></script>
+    <script src="/web-app/project-menu.js"></script>
+  </body>
+</html>
