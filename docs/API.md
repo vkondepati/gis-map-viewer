@@ -1,6 +1,6 @@
 # API Reference
 
-Complete API reference for Desktop GIS Map Viewer development.
+Complete API reference for NexaMap development.
 
 ## Table of Contents
 

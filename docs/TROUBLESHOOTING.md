@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-Common issues and solutions for the Desktop GIS Map Viewer.
+Common issues and solutions for NexaMap.
 
 ## Table of Contents
 

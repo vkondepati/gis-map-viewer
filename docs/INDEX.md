@@ -3,8 +3,9 @@
 ## Getting Started
 
 - [README.md](../README.md): Project overview and quick start
-- [INSTALLATION.md](INSTALLATION.md): Installation and local build instructions
+- [INSTALLATION.md](INSTALLATION.md): Desktop and web installation / local run instructions
 - [USAGE.md](USAGE.md): End-user workflows
+- [WEB_VERSION_PLAN.md](WEB_VERSION_PLAN.md): Shared desktop/web migration and architecture plan
 
 ## User Documentation
 

@@ -1,6 +1,6 @@
 # Project Roadmap
 
-Strategic vision and planned development timeline for Desktop GIS Map Viewer.
+Strategic vision and planned development timeline for NexaMap.
 
 ## Table of Contents
 

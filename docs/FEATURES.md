@@ -1,6 +1,6 @@
 # Features Guide
 
-Comprehensive documentation of all Desktop GIS Map Viewer features.
+Comprehensive documentation of NexaMap features.
 
 ## Table of Contents
 

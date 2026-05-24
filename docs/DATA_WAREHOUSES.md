@@ -16,7 +16,7 @@ Query spatial data directly from cloud data platforms: DuckDB, Snowflake, Databr
 
 ## Overview
 
-Modern GIS workflows often involve querying spatial data stored in data warehouses. Desktop GIS Map Viewer seamlessly integrates with major cloud data platforms to load and visualize geospatial data.
+Modern GIS workflows often involve querying spatial data stored in data warehouses. NexaMap integrates with major cloud data platforms to load and visualize geospatial data.
 
 ### Why Use Data Warehouses?
 
