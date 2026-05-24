@@ -1,6 +1,6 @@
 # Supported Data Formats
 
-Complete reference of all data formats supported by Desktop GIS Map Viewer.
+Complete reference of the data formats supported by NexaMap.
 
 ## Table of Contents
 

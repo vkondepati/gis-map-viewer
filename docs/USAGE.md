@@ -1,6 +1,6 @@
 # Usage Guide
 
-Quick start and common workflows for using Desktop GIS Map Viewer.
+Quick start and common workflows for using NexaMap.
 
 ## Table of Contents
 

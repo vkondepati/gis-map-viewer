@@ -1,10 +1,10 @@
-# Desktop GIS Map Viewer
+# NexaMap
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Stars](https://img.shields.io/github/stars/yourusername/gis-map-viewer.svg)](https://github.com/yourusername/gis-map-viewer)
 [![Build Status](https://img.shields.io/github/workflow/status/yourusername/gis-map-viewer/CI)](https://github.com/yourusername/gis-map-viewer/actions)
 
-A comprehensive, open-source desktop application for viewing, analyzing, and editing geospatial data from various sources. Built for GIS professionals, analysts, and developers.
+A comprehensive, open-source GIS application for viewing, analyzing, and editing geospatial data from various sources across desktop and web. Built for GIS professionals, analysts, and developers.
 
 ## ✨ Key Features
 
@@ -27,6 +27,38 @@ For source install and local build steps, see [INSTALLATION.md](docs/INSTALLATIO
 
 For CI/CD release builds and deployment artifacts, see [RELEASE_PIPELINE.md](docs/RELEASE_PIPELINE.md).
 
+### Web App
+
+Run the browser version locally from the repository root:
+
+```powershell
+npm install
+npm install --prefix web-app
+npm run api
+```
+
+In a second terminal:
+
+```powershell
+npm run web
+```
+
+Then open:
+
+`http://localhost:5173/web-app/`
+
+Notes:
+
+- The web app uses the shared NexaMap renderer with a web platform adapter.
+- `npm run api` is required for the map assistant and authentication routes.
+- Local project save/open in the web app uses browser downloads/uploads rather than native desktop file dialogs.
+- For Google or LinkedIn sign-in, configure the variables in [server-api/.env.example](server-api/.env.example) before starting the API server.
+
+### Platform Summary
+
+- `Desktop`: Electron app for local filesystem workflows, native dialogs, and desktop packaging
+- `Web`: Browser app served through Vite with the shared NexaMap frontend and a lightweight server API
+
 ### Basic Usage
 
 1. **Launch** the application
@@ -44,6 +76,7 @@ For detailed instructions, see [USAGE.md](docs/USAGE.md)
 | --------------------------------------------- | ----------------------------- |
 | [FEATURES.md](docs/FEATURES.md)               | Detailed feature descriptions |
 | [INSTALLATION.md](docs/INSTALLATION.md)       | Setup and installation guide  |
+| [WEB_VERSION_PLAN.md](docs/WEB_VERSION_PLAN.md) | Web version migration plan |
 | [USAGE.md](docs/USAGE.md)                     | User guide and tutorials      |
 | [API.md](docs/API.md)                         | Developer API reference       |
 | [CONFIGURATION.md](docs/CONFIGURATION.md)     | Configuration and preferences |

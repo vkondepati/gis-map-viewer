@@ -1,6 +1,6 @@
 # Configuration Guide
 
-User preferences, settings, and customization options for Desktop GIS Map Viewer.
+User preferences, settings, and customization options for NexaMap.
 
 ## Table of Contents
 

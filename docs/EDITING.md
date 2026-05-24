@@ -1,6 +1,6 @@
 # Editing Guide
 
-Complete guide to creating, modifying, and managing vector features in Desktop GIS Map Viewer.
+Complete guide to creating, modifying, and managing vector features in NexaMap.
 
 ## Table of Contents
 

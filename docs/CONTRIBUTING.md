@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for your interest in contributing to Desktop GIS Map Viewer! This document provides guidelines for participating in our open-source project.
+Thank you for your interest in contributing to NexaMap. This document provides guidelines for participating in the project.
 
 ## Table of Contents
 

@@ -1,6 +1,9 @@
 # Installation Guide
 
-This project is an Electron desktop application located in `electron-app/`.
+NexaMap currently ships in two local development targets:
+
+- `electron-app/`: desktop Electron application
+- `web-app/`: browser application using the shared NexaMap frontend
 
 ## System Requirements
 
@@ -9,7 +12,7 @@ This project is an Electron desktop application located in `electron-app/`.
 - npm 10+
 - Git
 
-## Run From Source
+## Run Desktop From Source
 
 1. Clone the repository.
 
@@ -36,7 +39,42 @@ Alternative:
 npm start
 ```
 
-## Build Distributables Locally
+## Run Web App From Source
+
+From repository root:
+
+1. Install root and web dependencies.
+
+```bash
+npm install
+npm install --prefix web-app
+```
+
+2. Start the API server.
+
+```bash
+npm run api
+```
+
+3. In a second terminal, start the web app.
+
+```bash
+npm run web
+```
+
+4. Open:
+
+```text
+http://localhost:5173/web-app/
+```
+
+Notes:
+
+- The web app uses browser upload/download flows instead of native desktop file dialogs.
+- Web authentication and the map assistant depend on `server-api/`.
+- OAuth providers for web login are configured through `server-api/.env.example`.
+
+## Build Desktop Distributables Locally
 
 From repository root:
 
@@ -68,3 +106,4 @@ Download the artifact for your platform from the GitHub Release and install it n
 - If Electron fails to launch, remove `electron-app/node_modules` and run install again.
 - If build tools fail on Linux, install required system libraries for Electron packaging.
 - If macOS build is unsigned in CI, this is expected unless signing secrets are configured.
+- If the web login dialog returns `Not found`, restart the API server with `npm run api`.

@@ -1,6 +1,6 @@
 # Architecture Guide
 
-System architecture, design patterns, and technical details for Desktop GIS Map Viewer.
+System architecture, design patterns, and technical details for NexaMap across desktop and web.
 
 ## Table of Contents
 
@@ -22,7 +22,7 @@ System architecture, design patterns, and technical details for Desktop GIS Map 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                   User Interface Layer                   │
-│  (Electron/Qt/Web UI - Desktop Application Frontend)    │
+│   (Electron Desktop Shell + Browser/Web Frontend)       │
 ├─────────────────────────────────────────────────────────┤
 │                  Application Logic Layer                 │
 │  (Map Engine, Tools, Project Management, Settings)      │
@@ -67,7 +67,7 @@ System architecture, design patterns, and technical details for Desktop GIS Map 
 **Technologies**:
 
 - Electron: Cross-platform desktop application shell
-- Qt: Alternative native UI framework
+- Web browser shell: Vite-served frontend using shared NexaMap modules
 - Web technologies: HTML5, CSS3, JavaScript/TypeScript
 
 **Communication**:

@@ -1,6 +1,6 @@
 # Coordinate Reference System (CRS) Support
 
-Complete guide to coordinate systems, projections, and spatial reference systems in Desktop GIS Map Viewer.
+Complete guide to coordinate systems, projections, and spatial reference systems in NexaMap.
 
 ## Table of Contents
 
