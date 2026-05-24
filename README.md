@@ -27,6 +27,26 @@ For source install and local build steps, see [INSTALLATION.md](docs/INSTALLATIO
 
 For CI/CD release builds and deployment artifacts, see [RELEASE_PIPELINE.md](docs/RELEASE_PIPELINE.md).
 
+### Desktop App
+
+Run the Electron desktop app locally from the repository root:
+
+```powershell
+npm install --prefix electron-app
+npm run dev
+```
+
+Alternative:
+
+```powershell
+npm start
+```
+
+Notes:
+
+- The desktop app runs from `electron-app/`.
+- Desktop mode supports native dialogs, local filesystem workflows, and desktop packaging.
+
 ### Web App
 
 Run the browser version locally from the repository root:
