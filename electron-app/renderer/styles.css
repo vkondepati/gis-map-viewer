@@ -31,6 +31,12 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 #toolbar{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0a1f2e;border-bottom:1px solid #072034;color:#fff;box-sizing:border-box}
 #toolbar-left{display:flex;align-items:center;gap:16px}
 #toolbar-buttons{display:flex;gap:8px}
+.auth-toolbar-state{display:flex;align-items:center;gap:10px;margin-left:auto;margin-right:10px}
+.auth-user-copy{display:flex;flex-direction:column;min-width:0;max-width:220px}
+.auth-user-copy strong,.auth-user-copy span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.auth-user-copy strong{font-size:13px;color:#fff}
+.auth-user-copy span{font-size:11px;color:#99c2dd}
+.auth-user-avatar{width:34px;height:34px;border-radius:50%;border:1px solid #366b94;object-fit:cover;background:#0d2740}
 .toolbar-btn{background:none;border:1px solid #366b94;color:#fff;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:16px;transition:all 0.2s}
 .toolbar-btn:hover{background:#366b94;box-shadow:0 0 6px rgba(54,107,148,0.5)}
 
@@ -163,6 +169,17 @@ body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif}
 .dialog-content input::placeholder{color:#999}
 .dialog-content button{background:#366b94;color:#fff;border:none;padding:8px 16px;margin-top:8px;margin-right:8px;border-radius:4px;cursor:pointer;transition:background 0.2s}
 .dialog-content button:hover{background:#4a8ec0}
+.auth-dialog-content{min-width:420px}
+.auth-social-row{display:flex;gap:10px}
+.auth-social-row button{flex:1}
+.auth-divider{display:flex;align-items:center;gap:10px;margin:12px 0;color:#99c2dd;font-size:12px}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;height:1px;background:#274a66}
+.auth-message{min-height:18px;margin-top:8px;font-size:12px;color:#99c2dd}
+.auth-message.error{color:#ffb1b1}
+.auth-message.success{color:#9fe3ba}
+.auth-switch-btn{display:block;background:none !important;color:#99c2dd !important;padding:0 !important;margin-top:12px !important;border:none !important}
+.auth-switch-btn:hover{color:#fff !important;text-decoration:underline}
+body[data-auth-mode="login"] #auth-name-row{display:none}
 
 /* Compact add-feature attributes dialog */
 #dialog-add-feature-attrs{

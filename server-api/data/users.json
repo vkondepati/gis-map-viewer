@@ -1,0 +1,15 @@
+{
+  "users": [
+    {
+      "id": "usr_c5c0b1e7137b53f1d355cd19",
+      "name": "Test",
+      "username": "kvenkatj",
+      "email": "kvenkatj2007@gmail.com",
+      "passwordHash": "scrypt$323a0a7b386cc34731ac248e21c6c9b1$b5d4340e7bbd96dab5fa570c6907bce7a10f9b095a19dd6ccf04ec68e38225425ebf005b247c9698b9b9bb5d637e1359caa20e77fade83d240552c83d8e51dba",
+      "authProvider": "local",
+      "avatarUrl": null,
+      "createdAt": "2026-05-24T18:30:52.978Z",
+      "lastLoginAt": "2026-05-24T18:31:37.562Z"
+    }
+  ]
+}

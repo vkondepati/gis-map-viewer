@@ -53,6 +53,7 @@ const BASEMAP_DEFINITIONS = [
 let activeLayerId = null;
 let currentProjectPath = null;
 let projectDirty = false;
+let appPlatform = null;
 const dirtyLayerIds = new Set();
 let onActiveLayerChanged = null;
 let editingSessionActive = false;
@@ -63,22 +64,101 @@ let attributesShowSelectedOnly = false;
 let getSelectedFeaturesForAttributeLayer = null;
 let toggleSelectionForAttributeRow = null;
 let showAttributeRowContextMenu = null;
+let updateProjectTitle = null;
+let markProjectDirty = null;
+let createMap = null;
+let getBasemapDefinition = null;
+let setBasemap = null;
+let updateBasemapSelectionUI = null;
+let renderBasemapDropdown = null;
+let base64ToArrayBuffer = null;
+let combineFeatureCollections = null;
+let parseSpatialFilePayload = null;
+let normalizeArcGISRestLayerUrl = null;
+let fetchJsonOrThrow = null;
+let inferGeometryTypeFromArcGISMetadata = null;
+let parseArcGISLayerReference = null;
+let projectArcGISExtentToBounds = null;
+let addArcGISRestServiceLayer = null;
+let showModal = null;
+let hideModal = null;
+let renderLayerList = null;
 
-function updateProjectTitle() {
-  const titleEl = document.getElementById('project-title-name');
-  if (!titleEl) return;
-  if (!currentProjectPath) {
-    titleEl.textContent = projectDirty ? '(unsaved*)' : '(unsaved)';
-    return;
-  }
-  titleEl.textContent = projectDirty
-    ? `(${getFileBaseName(currentProjectPath)}.prj*)`
-    : `(${getFileBaseName(currentProjectPath)}.prj)`;
-}
+function createNexaMapApp({ platform, document: providedDocument, window: providedWindow }) {
+  if (!platform) throw new Error('NexaMap platform is required.');
+  if (!providedDocument || !providedWindow) throw new Error('Browser document and window are required.');
+  appPlatform = platform;
+  const appStateHelpers = window.NexaMapCore.createAppStateHelpers({
+    document: providedDocument,
+    getCurrentProjectPath: () => currentProjectPath,
+    getProjectDirty: () => projectDirty,
+    setProjectDirty: (value) => { projectDirty = !!value; },
+    getFileBaseName,
+  });
+  updateProjectTitle = appStateHelpers.updateProjectTitle;
+  markProjectDirty = appStateHelpers.markProjectDirty;
 
-function markProjectDirty(isDirty = true) {
-  projectDirty = !!isDirty;
-  updateProjectTitle();
+  const mapRuntime = window.NexaMapCore.createMapRuntime({
+    L,
+    getMap: () => map,
+    setMap: (value) => { map = value; },
+    getBaseLayer: () => baseLayer,
+    setBaseLayer: (value) => { baseLayer = value; },
+    getCurrentBasemapId: () => currentBasemapId,
+    setCurrentBasemapId: (value) => { currentBasemapId = value; },
+    getDefaultBasemapId: () => DEFAULT_BASEMAP_ID,
+    getBasemapDefinitions: () => BASEMAP_DEFINITIONS,
+    markProjectDirty,
+    document: providedDocument,
+    window: providedWindow,
+  });
+  createMap = mapRuntime.createMap;
+  getBasemapDefinition = mapRuntime.getBasemapDefinition;
+  setBasemap = mapRuntime.setBasemap;
+  updateBasemapSelectionUI = mapRuntime.updateBasemapSelectionUI;
+  renderBasemapDropdown = mapRuntime.renderBasemapDropdown;
+
+  const fileImportTools = window.NexaMapCore.createFileImportTools({
+    shp: window.shp,
+    fetch: window.fetch.bind(window),
+    URL: window.URL,
+    Uint8Array: window.Uint8Array,
+    atob: window.atob.bind(window),
+    proj4: window.proj4,
+    L: window.L,
+    window: providedWindow,
+    getFileBaseName,
+    escapeHtml,
+    getDefaultSymbology,
+    entrySetSymDefaults,
+    getLayerSymStore: () => layerSym,
+    normalizeGeometryType,
+    getLayerIdSeq: () => layerIdSeq,
+    setLayerIdSeq: (value) => { layerIdSeq = value; },
+    addLayerEntry: (entry) => { layers.push(entry); },
+    getMap: () => map,
+    setActiveLayerId: (value) => { activeLayerId = value; },
+    setCurrentGeoJsonLayer: (value) => { currentGeoJsonLayer = value; },
+    setLastGeoJSONLoaded: (value) => { lastGeoJSONLoaded = value; },
+    renderLayerList: () => renderLayerList(),
+  });
+  base64ToArrayBuffer = fileImportTools.base64ToArrayBuffer;
+  combineFeatureCollections = fileImportTools.combineFeatureCollections;
+  parseSpatialFilePayload = fileImportTools.parseSpatialFilePayload;
+  normalizeArcGISRestLayerUrl = fileImportTools.normalizeArcGISRestLayerUrl;
+  fetchJsonOrThrow = fileImportTools.fetchJsonOrThrow;
+  inferGeometryTypeFromArcGISMetadata = fileImportTools.inferGeometryTypeFromArcGISMetadata;
+  parseArcGISLayerReference = fileImportTools.parseArcGISLayerReference;
+  projectArcGISExtentToBounds = fileImportTools.projectArcGISExtentToBounds;
+  addArcGISRestServiceLayer = fileImportTools.addArcGISRestServiceLayer;
+
+  const dialogHelpers = window.NexaMapUI.createDialogHelpers({
+    document: providedDocument,
+  });
+  showModal = dialogHelpers.showModal;
+  hideModal = dialogHelpers.hideModal;
+
+  initializeNexaMapApp();
 }
 
 function normalizeGeometryType(geomType) {
@@ -141,7 +221,7 @@ async function saveLayerToFile(layerId, options = {}) {
   if (!entry || !entry.geojson) return false;
   const content = JSON.stringify(entry.geojson, null, 2);
   if (entry.sourcePath) {
-    const writeRes = await window.electronAPI.writeGeoJSON(entry.sourcePath, content);
+    const writeRes = await appPlatform.writeGeoJSON(entry.sourcePath, content);
     if (writeRes && writeRes.ok) {
       markLayerDirty(layerId, false);
       return true;
@@ -153,7 +233,7 @@ async function saveLayerToFile(layerId, options = {}) {
   }
 
   const defaultName = `${entry.name || 'layer'}.geojson`;
-  const res = await window.electronAPI.saveGeoJSON(defaultName, content);
+  const res = await appPlatform.saveGeoJSON(defaultName, content);
   if (res && !res.canceled) {
     entry.sourcePath = res.path;
     markLayerDirty(layerId, false);
@@ -325,71 +405,6 @@ function swapGeoJSONCoordinates(geojson) {
   return swapGeometry(clone);
 }
 
-function createMap(crs) {
-  // Destroy existing map if any
-  if (map) {
-    map.remove();
-    map = null;
-  }
-
-  // For simplicity we use standard CRS handling: Leaflet default (EPSG:3857)
-  map = L.map('map', { center: [0, 0], zoom: 2 });
-  window.map = map;
-  setBasemap(currentBasemapId, { silent: true, markDirty: false });
-}
-
-function getBasemapDefinition(basemapId) {
-  return BASEMAP_DEFINITIONS.find((item) => item.id === basemapId) || null;
-}
-
-function setBasemap(basemapId, options = {}) {
-  const { silent = false, markDirty = true } = options;
-  const basemap = getBasemapDefinition(basemapId) || getBasemapDefinition(DEFAULT_BASEMAP_ID);
-  if (!map || !basemap) return false;
-  if (baseLayer && map.hasLayer(baseLayer)) map.removeLayer(baseLayer);
-  baseLayer = L.tileLayer(basemap.tileUrl, Object.assign({}, basemap.options || {})).addTo(map);
-  currentBasemapId = basemap.id;
-  if (markDirty) markProjectDirty(true);
-  if (!silent) updateBasemapSelectionUI();
-  return true;
-}
-
-function updateBasemapSelectionUI() {
-  const buttonLabel = document.getElementById('selected-basemap-label');
-  const basemapList = document.getElementById('basemap-dropdown');
-  const current = getBasemapDefinition(currentBasemapId) || getBasemapDefinition(DEFAULT_BASEMAP_ID);
-  if (buttonLabel && current) buttonLabel.textContent = current.label;
-  if (basemapList) {
-    basemapList.querySelectorAll('.basemap-item').forEach((item) => {
-      item.classList.toggle('active', item.dataset.basemapId === currentBasemapId);
-    });
-  }
-}
-
-function renderBasemapDropdown() {
-  const list = document.getElementById('basemap-dropdown');
-  if (!list) return;
-  list.innerHTML = '';
-  BASEMAP_DEFINITIONS.forEach((basemap) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'dropdown-item basemap-item';
-    btn.dataset.basemapId = basemap.id;
-    btn.innerHTML = `
-      <img class="basemap-thumb" src="${basemap.thumbnail}" alt="${basemap.label}" loading="lazy" />
-      <span class="basemap-label">${basemap.label}</span>
-    `;
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setBasemap(basemap.id);
-      list.style.display = 'none';
-    });
-    list.appendChild(btn);
-  });
-  updateBasemapSelectionUI();
-}
-
 function getDashArrayForLineStyle(lineStyle) {
   if (lineStyle === 'dashed') return '8,6';
   if (lineStyle === 'dotted') return '2,6';
@@ -475,252 +490,6 @@ function createLeafletLayerForGeoJSON(geojson, layerId) {
 function getFileBaseName(filePath = '') {
   const name = String(filePath).split(/[\\/]/).pop() || '';
   return name.replace(/\.[^/.]+$/, '') || 'Layer';
-}
-
-function base64ToArrayBuffer(base64) {
-  const binary = atob(String(base64 || ''));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
-
-function combineFeatureCollections(input) {
-  if (!input) return { type: 'FeatureCollection', features: [] };
-  if (Array.isArray(input)) {
-    return {
-      type: 'FeatureCollection',
-      features: input.flatMap((item) => {
-        if (!item) return [];
-        if (Array.isArray(item.features)) return item.features;
-        if (item.type === 'Feature') return [item];
-        return [];
-      }),
-    };
-  }
-  if (input.type === 'FeatureCollection') return input;
-  if (input.type === 'Feature') return { type: 'FeatureCollection', features: [input] };
-  return { type: 'FeatureCollection', features: [] };
-}
-
-async function parseSpatialFilePayload(filePayload) {
-  if (!filePayload || !filePayload.path) {
-    throw new Error('Missing file payload.');
-  }
-  const extension = String(filePayload.extension || '').toLowerCase();
-  if (extension === '.geojson' || extension === '.json') {
-    return {
-      geojson: JSON.parse(filePayload.content),
-      sourceCrs: null,
-      sourcePath: filePayload.path,
-    };
-  }
-  if (extension === '.zip' || extension === '.shp') {
-    if (typeof shp !== 'function') {
-      throw new Error('Shapefile parser is not available.');
-    }
-    let parsed;
-    if (extension === '.zip') {
-      parsed = await shp(base64ToArrayBuffer(filePayload.content));
-    } else {
-      const shapeParts = {
-        shp: base64ToArrayBuffer(filePayload.content),
-      };
-      const related = filePayload.relatedFiles || {};
-      if (related.dbf && related.dbf.content) shapeParts.dbf = base64ToArrayBuffer(related.dbf.content);
-      if (related.prj && typeof related.prj.content === 'string') shapeParts.prj = related.prj.content;
-      if (related.cpg && typeof related.cpg.content === 'string') shapeParts.cpg = related.cpg.content;
-      parsed = await shp(shapeParts);
-    }
-    return {
-      geojson: combineFeatureCollections(parsed),
-      sourceCrs: 'EPSG:4326',
-      sourcePath: filePayload.path,
-    };
-  }
-  throw new Error(`Unsupported file type: ${extension || 'unknown'}`);
-}
-
-function normalizeArcGISRestLayerUrl(rawUrl) {
-  const trimmed = String(rawUrl || '').trim();
-  if (!trimmed) return '';
-  const parsed = new URL(trimmed);
-  parsed.hash = '';
-  parsed.search = '';
-  const normalizedPath = parsed.pathname.replace(/\/query$/i, '').replace(/\/+$/, '');
-  parsed.pathname = normalizedPath;
-  return parsed.toString();
-}
-
-async function fetchJsonOrThrow(url) {
-  const response = await fetch(url);
-  const payload = await response.json();
-  if (!response.ok) {
-    const message = payload && payload.error && payload.error.message
-      ? payload.error.message
-      : `Request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-  if (payload && payload.error && payload.error.message) {
-    throw new Error(payload.error.message);
-  }
-  return payload;
-}
-
-async function loadArcGISRestLayer(layerUrl) {
-  const normalizedUrl = normalizeArcGISRestLayerUrl(layerUrl);
-  if (!normalizedUrl) throw new Error('Layer URL is required.');
-  const metadata = await fetchJsonOrThrow(`${normalizedUrl}?f=json`);
-  const supportedFormats = String(metadata.supportedQueryFormats || '').toLowerCase();
-  if (!supportedFormats.includes('geojson')) {
-    throw new Error('This ArcGIS layer does not advertise geojson query support.');
-  }
-  const maxRecordCount = Math.max(1, Number(metadata.maxRecordCount) || 2000);
-  const features = [];
-  let resultOffset = 0;
-  let exceeded = false;
-  do {
-    const queryUrl = new URL(`${normalizedUrl}/query`);
-    queryUrl.searchParams.set('where', '1=1');
-    queryUrl.searchParams.set('outFields', '*');
-    queryUrl.searchParams.set('returnGeometry', 'true');
-    queryUrl.searchParams.set('f', 'geojson');
-    queryUrl.searchParams.set('outSR', '4326');
-    queryUrl.searchParams.set('resultOffset', String(resultOffset));
-    queryUrl.searchParams.set('resultRecordCount', String(maxRecordCount));
-    const page = await fetchJsonOrThrow(queryUrl.toString());
-    const pageFeatures = Array.isArray(page.features) ? page.features : [];
-    features.push(...pageFeatures);
-    exceeded = !!page.exceededTransferLimit;
-    resultOffset += pageFeatures.length;
-    if (pageFeatures.length === 0) break;
-  } while (exceeded);
-  return {
-    name: metadata.name || getFileBaseName(normalizedUrl),
-    sourcePath: normalizedUrl,
-    geojson: {
-      type: 'FeatureCollection',
-      features,
-    },
-  };
-}
-
-function inferGeometryTypeFromArcGISMetadata(metadata) {
-  const rawType = String(metadata && metadata.geometryType || '').toLowerCase();
-  if (rawType.includes('polygon')) return 'Polygon';
-  if (rawType.includes('polyline') || rawType.includes('line')) return 'LineString';
-  if (rawType.includes('point')) return 'Point';
-  return 'Point';
-}
-
-function parseArcGISLayerReference(layerUrl) {
-  const normalizedUrl = normalizeArcGISRestLayerUrl(layerUrl);
-  const featureMatch = normalizedUrl.match(/\/FeatureServer\/(\d+)$/i);
-  if (featureMatch) {
-    return {
-      normalizedUrl,
-      serviceUrl: normalizedUrl.replace(/\/FeatureServer\/\d+$/i, '/MapServer'),
-      layerId: Number(featureMatch[1]),
-      sourceKind: 'FeatureServer',
-    };
-  }
-  const mapMatch = normalizedUrl.match(/\/MapServer\/(\d+)$/i);
-  if (mapMatch) {
-    return {
-      normalizedUrl,
-      serviceUrl: normalizedUrl.replace(/\/MapServer\/\d+$/i, '/MapServer'),
-      layerId: Number(mapMatch[1]),
-      sourceKind: 'MapServer',
-    };
-  }
-  return {
-    normalizedUrl,
-    serviceUrl: normalizedUrl,
-    layerId: null,
-    sourceKind: /\/MapServer$/i.test(normalizedUrl) ? 'MapServer' : 'Unknown',
-  };
-}
-
-function projectArcGISExtentToBounds(extent) {
-  if (!extent || !extent.spatialReference) return null;
-  const wkid = Number(extent.spatialReference.latestWkid || extent.spatialReference.wkid || 0);
-  const xmin = Number(extent.xmin);
-  const ymin = Number(extent.ymin);
-  const xmax = Number(extent.xmax);
-  const ymax = Number(extent.ymax);
-  if (![xmin, ymin, xmax, ymax].every(Number.isFinite)) return null;
-  if (wkid === 4326) {
-    return L.latLngBounds([ymin, xmin], [ymax, xmax]);
-  }
-  if ((wkid === 3857 || wkid === 102100) && typeof proj4 === 'function') {
-    const sw = proj4('EPSG:3857', 'EPSG:4326', [xmin, ymin]);
-    const ne = proj4('EPSG:3857', 'EPSG:4326', [xmax, ymax]);
-    return L.latLngBounds([sw[1], sw[0]], [ne[1], ne[0]]);
-  }
-  return null;
-}
-
-async function addArcGISRestServiceLayer(layerUrl, options = {}) {
-  const layerRef = parseArcGISLayerReference(layerUrl);
-  if (!layerRef.normalizedUrl) throw new Error('Layer URL is required.');
-  if (!window.L || !L.esri) {
-    throw new Error('Esri Leaflet is not available.');
-  }
-  const metadata = await fetchJsonOrThrow(`${layerRef.normalizedUrl}?f=json`);
-  const id = 'layer-' + layerIdSeq++;
-  const geometryType = inferGeometryTypeFromArcGISMetadata(metadata);
-  if (!layerSym[id]) {
-    entrySetSymDefaults(id, getDefaultSymbology(geometryType));
-  }
-  let serviceLayer = null;
-  if (layerRef.layerId != null && typeof L.esri.dynamicMapLayer === 'function') {
-    serviceLayer = L.esri.dynamicMapLayer({
-      url: layerRef.serviceUrl,
-      layers: [layerRef.layerId],
-      opacity: 0.85,
-      transparent: true,
-    });
-  } else if (typeof L.esri.featureLayer === 'function') {
-    serviceLayer = L.esri.featureLayer({
-      url: layerRef.normalizedUrl,
-      simplifyFactor: 0.35,
-      precision: 6,
-    });
-    serviceLayer.bindPopup((layer) => {
-      const props = layer && layer.feature && layer.feature.properties ? layer.feature.properties : {};
-      return `<pre>${escapeHtml(JSON.stringify(props, null, 2))}</pre>`;
-    });
-  } else {
-    throw new Error('No supported ArcGIS layer type is available.');
-  }
-  const entry = {
-    id,
-    name: options.name || metadata.name || getFileBaseName(layerRef.normalizedUrl),
-    layer: serviceLayer,
-    visible: true,
-    geojson: null,
-    geometryType,
-    sourcePath: layerRef.normalizedUrl,
-    sourceType: 'arcgis-rest',
-    serviceMetadata: metadata,
-  };
-
-  serviceLayer.addTo(map);
-  layers.push(entry);
-  activeLayerId = id;
-  currentGeoJsonLayer = null;
-  lastGeoJSONLoaded = null;
-  renderLayerList();
-
-  try {
-    const extentBounds = projectArcGISExtentToBounds(metadata.extent || metadata.fullExtent || metadata.initialExtent);
-    if (extentBounds && extentBounds.isValid && extentBounds.isValid()) {
-      map.fitBounds(extentBounds, { padding: [20, 20] });
-    }
-  } catch (err) {
-    console.warn('Unable to fit ArcGIS REST layer extent:', err);
-  }
-
-  return entry;
 }
 
 function addGeoJSONLayer(geojson, name, options = {}) {
@@ -1197,13 +966,20 @@ function toggleLayerVisibility(id, visible) {
   if (!entry) return;
   if (visible) {
     entry.layer.addTo(map);
+    if (entry.interactionLayer && entry.interactionLayer !== entry.layer) entry.interactionLayer.addTo(map);
     entry.visible = true;
     renderLayerLabels(id);
   } else {
     map.removeLayer(entry.layer);
+    if (entry.interactionLayer && entry.interactionLayer !== entry.layer) map.removeLayer(entry.interactionLayer);
     entry.visible = false;
     clearLayerLabelMarkers(id);
   }
+}
+
+function getEntryFeatureContainer(entry) {
+  if (!entry) return null;
+  return entry.interactionLayer || entry.layer || null;
 }
 
 function featuresAreEquivalent(a, b) {
@@ -1223,11 +999,12 @@ function getFilteredAttributeFeatureRows(entry) {
 }
 
 function getFeatureLayerByFeatureIndex(entry, featureIndex) {
-  if (!entry || !entry.layer || !entry.geojson || !Array.isArray(entry.geojson.features)) return null;
+  const featureContainer = getEntryFeatureContainer(entry);
+  if (!featureContainer || !entry.geojson || !Array.isArray(entry.geojson.features)) return null;
   const feature = entry.geojson.features[featureIndex];
   if (!feature) return null;
   let matched = null;
-  entry.layer.eachLayer((child) => {
+  featureContainer.eachLayer((child) => {
     if (matched || !child || !child.feature) return;
     if (child.feature === feature || featuresAreEquivalent(child.feature, feature)) matched = child;
   });
@@ -1405,13 +1182,13 @@ async function exportAttributeTableToCsv() {
   }
   const csv = buildCsvFromAttributeTable();
   const defaultName = `${(entry.name || 'attributes').replace(/[\\/:*?"<>|]+/g, '_')}.csv`;
-  if (window.electronAPI.saveTextFile) {
-    const res = await window.electronAPI.saveTextFile(defaultName, csv);
+  if (appPlatform.saveTextFile) {
+    const res = await appPlatform.saveTextFile(defaultName, csv);
     if (res && !res.canceled) alert('CSV saved: ' + res.path);
     else if (res && res.error) alert('CSV export failed: ' + res.error);
     return;
   }
-  const fallbackRes = await window.electronAPI.saveGeoJSON(defaultName, csv);
+  const fallbackRes = await appPlatform.saveGeoJSON(defaultName, csv);
   if (fallbackRes && !fallbackRes.canceled) alert('CSV saved: ' + fallbackRes.path);
   else if (fallbackRes && fallbackRes.error) alert('CSV export failed: ' + fallbackRes.error);
 }
@@ -1573,7 +1350,7 @@ async function exportGeoJSON() {
   if (!lastGeoJSONLoaded) { alert('No GeoJSON loaded'); return; }
   const content = JSON.stringify(lastGeoJSONLoaded, null, 2);
   const defaultName = 'export.geojson';
-  const res = await window.electronAPI.saveGeoJSON(defaultName, content);
+  const res = await appPlatform.saveGeoJSON(defaultName, content);
   if (res && !res.canceled) {
     alert('Saved to: ' + res.path);
   } else if (res && res.error) {
@@ -1581,7 +1358,10 @@ async function exportGeoJSON() {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+function initializeNexaMapApp() {
+  if (appPlatform && appPlatform.kind === 'web') {
+    document.title = 'NexaMap Web';
+  }
     // === Layers Menu ===
     const btnLayers = document.getElementById('btn-layers');
     const layersDropdown = document.getElementById('layers-dropdown');
@@ -1611,6 +1391,11 @@ window.addEventListener('DOMContentLoaded', () => {
     let fileOpsSelectedPath = '';
     let pendingCreateFileType = 'geojson';
     let renameLayerTargetId = null;
+
+    if (appPlatform && appPlatform.supportsWorkspaceOps === false) {
+      const fileOpsPanel = document.getElementById('file-ops-panel');
+      if (fileOpsPanel) fileOpsPanel.style.display = 'none';
+    }
 
     function ensureFileOpsNameInputEnabled() {
       if (!fileOpsNameInput) return;
@@ -1679,11 +1464,11 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     async function refreshFileOpsList() {
-      if (!fileOpsCurrentFolder || !window.electronAPI.listDirectory) {
+      if (!fileOpsCurrentFolder || !appPlatform.listDirectory) {
         renderFileOpsEntries([]);
         return;
       }
-      const res = await window.electronAPI.listDirectory(fileOpsCurrentFolder);
+      const res = await appPlatform.listDirectory(fileOpsCurrentFolder);
       if (!res || !res.ok) {
         alert('List folder failed: ' + (res && res.error ? res.error : 'Unknown error'));
         return;
@@ -1711,8 +1496,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (fileOpsPickFolderBtn) {
       fileOpsPickFolderBtn.addEventListener('click', async () => {
-        if (!window.electronAPI.pickFolder) return;
-        const res = await window.electronAPI.pickFolder();
+        if (!appPlatform.pickFolder) return;
+        const res = await appPlatform.pickFolder();
         if (!res || res.canceled || !res.path) return;
         setFileOpsFolderPath(res.path);
         await refreshFileOpsList();
@@ -1741,7 +1526,7 @@ window.addEventListener('DOMContentLoaded', () => {
             alert('Enter a folder name.');
             return;
           }
-          const res = await window.electronAPI.createFolder(fileOpsCurrentFolder, name);
+          const res = await appPlatform.createFolder(fileOpsCurrentFolder, name);
           if (!res || !res.ok) {
             alert('Create failed: ' + (res && res.error ? res.error : 'Unknown error'));
             ensureFileOpsNameInputEnabled();
@@ -1774,8 +1559,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (createFileLocationBrowseBtn) {
       createFileLocationBrowseBtn.addEventListener('click', async () => {
-        if (!window.electronAPI.pickFolder) return;
-        const res = await window.electronAPI.pickFolder();
+        if (!appPlatform.pickFolder) return;
+        const res = await appPlatform.pickFolder();
         if (!res || res.canceled || !res.path) return;
         if (createFileLocationInput) createFileLocationInput.value = res.path;
       });
@@ -1796,9 +1581,9 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         const columns = collectCreateFileColumns();
         let res = null;
-        if (pendingCreateFileType === 'geojson') res = await window.electronAPI.createGeoJSONFile(folderPath, name, columns, targetCrs);
-        else if (pendingCreateFileType === 'kml') res = await window.electronAPI.createKMLFile(folderPath, name, columns, targetCrs);
-        else if (pendingCreateFileType === 'attributes') res = await window.electronAPI.createAttributesFile(folderPath, name, columns);
+        if (pendingCreateFileType === 'geojson') res = await appPlatform.createGeoJSONFile(folderPath, name, columns, targetCrs);
+        else if (pendingCreateFileType === 'kml') res = await appPlatform.createKMLFile(folderPath, name, columns, targetCrs);
+        else if (pendingCreateFileType === 'attributes') res = await appPlatform.createAttributesFile(folderPath, name, columns);
         if (!res || !res.ok) {
           alert('Create failed: ' + (res && res.error ? res.error : 'Unknown error'));
           return;
@@ -1824,7 +1609,7 @@ window.addEventListener('DOMContentLoaded', () => {
         }
         const ok = confirm(`Delete selected path?\n${fileOpsSelectedPath}`);
         if (!ok) return;
-        const res = await window.electronAPI.deletePath(fileOpsSelectedPath);
+        const res = await appPlatform.deletePath(fileOpsSelectedPath);
         if (!res || !res.ok) {
           alert('Delete failed: ' + (res && res.error ? res.error : 'Unknown error'));
           return;
@@ -2136,33 +1921,38 @@ window.addEventListener('DOMContentLoaded', () => {
         activeLayerId,
         layerIdSeq,
         dirtyLayerIds: Array.from(dirtyLayerIds),
-        layers: layers.map((layerEntry) => ({
-          id: layerEntry.id,
-          name: layerEntry.name,
-          visible: layerEntry.visible !== false,
-          geometryType: layerEntry.geometryType,
-          sourcePath: layerEntry.sourcePath || null,
-          geojson: layerEntry.geojson,
-          symbology: layerSym[layerEntry.id] || getDefaultSymbology(layerEntry.geometryType || 'Point'),
-          labels: layerLabels[layerEntry.id]
-            ? {
-                columnName: layerLabels[layerEntry.id].columnName,
-                enabled: layerLabels[layerEntry.id].enabled !== false,
-                options: Object.assign({}, LABEL_STYLE_DEFAULTS, layerLabels[layerEntry.id].options || {}),
-              }
-            : null,
+        layers: layers.map((layerEntry) => window.NexaMapCore.projectIo.serializeProjectLayer(layerEntry, {
+          layerSym,
+          layerLabels,
+          getDefaultSymbology,
+          labelStyleDefaults: LABEL_STYLE_DEFAULTS,
         })),
       };
     }
 
-    function loadProjectState(projectData, sourcePath) {
+    async function loadProjectState(projectData, sourcePath) {
       if (!projectData || !Array.isArray(projectData.layers)) {
         alert('Invalid project file.');
         return false;
       }
       clearProjectWorkspace();
 
-      projectData.layers.forEach((layerDef) => {
+      for (const layerDef of projectData.layers) {
+        if (layerDef && layerDef.sourceType === 'arcgis-rest' && layerDef.sourcePath) {
+          try {
+            await addArcGISRestServiceLayer(layerDef.sourcePath, {
+              name: layerDef.name || 'ArcGIS REST Layer',
+              layerId: layerDef.id || undefined,
+              visible: layerDef.visible !== false,
+              activate: false,
+              skipRender: true,
+              fitBounds: false,
+            });
+          } catch (err) {
+            console.warn(`Failed to restore ArcGIS REST layer "${layerDef.name || layerDef.sourcePath}":`, err);
+          }
+          continue;
+        }
         const geojson = layerDef.geojson || { type: 'FeatureCollection', features: [] };
         const created = createEmptyLayer(
           layerDef.name || 'Layer',
@@ -2186,7 +1976,7 @@ window.addEventListener('DOMContentLoaded', () => {
             options: Object.assign({}, LABEL_STYLE_DEFAULTS, layerDef.labels.options || {}),
           };
         }
-      });
+      }
 
       if (projectData.layerIdSeq && Number.isFinite(Number(projectData.layerIdSeq))) {
         layerIdSeq = Math.max(layerIdSeq, Number(projectData.layerIdSeq));
@@ -2230,10 +2020,10 @@ window.addEventListener('DOMContentLoaded', () => {
       return true;
     }
 
-    function loadProjectFromContent(content, sourcePath) {
+    async function loadProjectFromContent(content, sourcePath) {
       try {
         const projectData = JSON.parse(content);
-        const ok = loadProjectState(projectData, sourcePath);
+        const ok = await loadProjectState(projectData, sourcePath);
         if (!ok) return false;
         return true;
       } catch (err) {
@@ -2245,13 +2035,13 @@ window.addEventListener('DOMContentLoaded', () => {
     async function openProjectFromDialog() {
       const proceed = await confirmSaveBeforeProjectClose();
       if (!proceed) return;
-      const res = await window.electronAPI.openProject();
+      const res = await appPlatform.openProject();
       if (!res || res.canceled) return;
       if (res.error) {
         alert('Open project failed: ' + res.error);
         return;
       }
-      loadProjectFromContent(res.content, res.path);
+      await loadProjectFromContent(res.content, res.path);
     }
 
     async function saveProjectToFile() {
@@ -2260,7 +2050,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const defaultName = `${projectName}.prj`;
       const content = JSON.stringify(projectData, null, 2);
       if (currentProjectPath) {
-        const writeRes = await window.electronAPI.writeProject(currentProjectPath, content);
+        const writeRes = await appPlatform.writeProject(currentProjectPath, content);
         if (!writeRes || !writeRes.ok) {
           alert('Save project failed: ' + (writeRes && writeRes.error ? writeRes.error : 'Unknown error'));
           return;
@@ -2270,7 +2060,7 @@ window.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const res = await window.electronAPI.saveProject(defaultName, content, currentProjectPath || undefined);
+      const res = await appPlatform.saveProject(defaultName, content, currentProjectPath || undefined);
       if (!res || res.canceled) return;
       if (res.error) {
         alert('Save project failed: ' + res.error);
@@ -2286,7 +2076,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const projectName = getFileBaseName(currentProjectPath || 'project');
       const defaultName = `${projectName}.prj`;
       const content = JSON.stringify(projectData, null, 2);
-      const res = await window.electronAPI.saveProject(defaultName, content, currentProjectPath || undefined);
+      const res = await appPlatform.saveProject(defaultName, content, currentProjectPath || undefined);
       if (!res || res.canceled) return;
       if (res.error) {
         alert('Save project failed: ' + res.error);
@@ -2407,6 +2197,7 @@ window.addEventListener('DOMContentLoaded', () => {
         dirtyLayerIds.delete(layerId);
         removeLayerLabels(layerId);
         if (layers[idx].layer) layers[idx].layer.remove();
+        if (layers[idx].interactionLayer && layers[idx].interactionLayer !== layers[idx].layer) layers[idx].interactionLayer.remove();
         layers.splice(idx, 1);
         if (!activeLayerId && layers.length > 0) activeLayerId = layers[layers.length - 1].id;
         renderLayerList();
@@ -2415,7 +2206,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     // Render TOC
-    function renderLayerList() {
+    renderLayerList = function renderLayerListImpl() {
       const ul = document.getElementById('layer-list');
       ul.innerHTML = '';
       layers.forEach(l => {
@@ -2461,7 +2252,7 @@ window.addEventListener('DOMContentLoaded', () => {
         ul.appendChild(li);
       });
       refreshLayerListState();
-    }
+    };
 
     // Toggle layer visibility
     function toggleLayerVisibility(layerId, visible) {
@@ -2471,9 +2262,11 @@ window.addEventListener('DOMContentLoaded', () => {
         if (l.layer) {
           if (visible) {
             l.layer.addTo(map);
+            if (l.interactionLayer && l.interactionLayer !== l.layer) l.interactionLayer.addTo(map);
             renderLayerLabels(layerId);
           } else {
             l.layer.remove();
+            if (l.interactionLayer && l.interactionLayer !== l.layer) l.interactionLayer.remove();
             clearLayerLabelMarkers(layerId);
           }
         }
@@ -2526,7 +2319,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const openBtn = document.getElementById('open-btn');
   if (openBtn) {
     openBtn.addEventListener('click', async () => {
-      const res = await window.electronAPI.openSpatialFile();
+      const res = await appPlatform.openSpatialFile();
       if (res && !res.canceled) {
         try {
           const loaded = await parseSpatialFilePayload(res);
@@ -2550,27 +2343,6 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }
     });
-  }
-
-  // Helper function to show/hide modals
-  function showModal(dialogId) {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById(dialogId);
-    if (overlay && dialog) {
-      overlay.classList.add('visible');
-      dialog.classList.add('visible');
-      dialog.classList.remove('modal-hidden');
-    }
-  }
-
-  function hideModal(dialogId) {
-    const overlay = document.getElementById('modal-overlay');
-    const dialog = document.getElementById(dialogId);
-    if (overlay && dialog) {
-      overlay.classList.remove('visible');
-      dialog.classList.remove('visible');
-      dialog.classList.add('modal-hidden');
-    }
   }
 
   // Close modal when clicking overlay
@@ -2700,20 +2472,20 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  if (window.electronAPI.onOpenProjectFromShell) {
-    window.electronAPI.onOpenProjectFromShell(async (payload) => {
+  if (appPlatform.onOpenProjectFromShell) {
+    appPlatform.onOpenProjectFromShell(async (payload) => {
       if (!payload || !payload.path) return;
-      const res = await window.electronAPI.readProject(payload.path);
+      const res = await appPlatform.readProject(payload.path);
       if (!res || res.canceled) {
         if (res && res.error) alert('Open project failed: ' + res.error);
         return;
       }
-      loadProjectFromContent(res.content, res.path);
+      await loadProjectFromContent(res.content, res.path);
     });
   }
 
-  if (window.electronAPI.onMenuAction) {
-    window.electronAPI.onMenuAction(async (payload) => {
+  if (appPlatform.onMenuAction) {
+    appPlatform.onMenuAction(async (payload) => {
       if (!payload || !payload.action) return;
       const action = payload.action;
       if (action === 'open-project') await openProjectFromDialog();
@@ -3314,10 +3086,11 @@ window.addEventListener('DOMContentLoaded', () => {
   function getFeatureLayers(includeHidden = true) {
     const out = [];
     layers.forEach((entry) => {
-      if (!entry || !entry.layer) return;
-      if (!includeHidden && !map.hasLayer(entry.layer)) return;
-      if (typeof entry.layer.eachLayer !== 'function') return;
-      entry.layer.eachLayer((child) => {
+      const featureContainer = getEntryFeatureContainer(entry);
+      if (!featureContainer) return;
+      if (!includeHidden && !map.hasLayer(featureContainer)) return;
+      if (typeof featureContainer.eachLayer !== 'function') return;
+      featureContainer.eachLayer((child) => {
         if (child && child.feature) out.push(child);
       });
     });
@@ -3326,11 +3099,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function getActiveLayerFeatureLayers(includeHidden = true) {
     const entry = getActiveLayerEntry();
-    if (!entry || !entry.layer) return [];
-    if (!includeHidden && !map.hasLayer(entry.layer)) return [];
-    if (typeof entry.layer.eachLayer !== 'function') return [];
+    const featureContainer = getEntryFeatureContainer(entry);
+    if (!featureContainer) return [];
+    if (!includeHidden && !map.hasLayer(featureContainer)) return [];
+    if (typeof featureContainer.eachLayer !== 'function') return [];
     const out = [];
-    entry.layer.eachLayer((child) => {
+    featureContainer.eachLayer((child) => {
       if (child && child.feature) out.push(child);
     });
     return out;
@@ -3681,7 +3455,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1300));
-    const pdfRes = await window.electronAPI.saveCurrentWindowPdf({
+    const pdfRes = await appPlatform.saveCurrentWindowPdf({
       defaultName: `${(settings.title || 'map-export').replace(/[\\/:*?"<>|]+/g, '_')}.pdf`,
       orientation: settings.orientation,
       pageSize: settings.pageSize
@@ -4160,7 +3934,10 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function getFeatureOwnerEntry(featureLayer) {
-    return layers.find((entry) => entry.layer && typeof entry.layer.hasLayer === 'function' && entry.layer.hasLayer(featureLayer)) || null;
+    return layers.find((entry) => {
+      const featureContainer = getEntryFeatureContainer(entry);
+      return featureContainer && typeof featureContainer.hasLayer === 'function' && featureContainer.hasLayer(featureLayer);
+    }) || null;
   }
 
   function getFeatureIndex(entry, featureLayer) {
@@ -4610,7 +4387,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const fileBrowseBtn = document.getElementById('dialog-file-browse');
   if (fileBrowseBtn) {
     fileBrowseBtn.addEventListener('click', async () => {
-      const res = await window.electronAPI.openSpatialFile();
+      const res = await appPlatform.openSpatialFile();
       if (res && res.path && res.content) {
         document.getElementById('dialog-file-path').value = res.path;
         const preferredNameInput = document.getElementById('dialog-file-layer-name');
@@ -5116,7 +4893,7 @@ window.addEventListener('DOMContentLoaded', () => {
     appendMapChatMessage('assistant', 'Analyzing map...');
     const pendingNode = mapChatMessages ? mapChatMessages.lastElementChild : null;
     try {
-      if (!window.electronAPI.askMapAssistant) {
+      if (!appPlatform.askMapAssistant) {
         throw new Error('Chat assistant API is not available.');
       }
       const mapContext = buildMapAssistantContext();
@@ -5126,7 +4903,7 @@ window.addEventListener('DOMContentLoaded', () => {
         question,
         mapContext,
       };
-      const res = await window.electronAPI.askMapAssistant(payload);
+      const res = await appPlatform.askMapAssistant(payload);
       if (pendingNode && pendingNode.parentElement === mapChatMessages) pendingNode.remove();
       if (!res || !res.ok) {
         const errorText = `Unable to answer: ${res && res.error ? res.error : 'Unknown error'}`;
@@ -5163,6 +4940,29 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   updateSelectedFeaturesWindow();
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const desktopFactory = window.NexaMapPlatforms && typeof window.NexaMapPlatforms.desktop === 'function'
+    ? window.NexaMapPlatforms.desktop
+    : null;
+  const webFactory = window.NexaMapPlatforms && typeof window.NexaMapPlatforms.web === 'function'
+    ? window.NexaMapPlatforms.web
+    : null;
+  let platform = null;
+  if (window.electronAPI && desktopFactory) {
+    platform = desktopFactory(window.electronAPI || {});
+  } else if (webFactory) {
+    platform = webFactory();
+  }
+  if (!platform) {
+    throw new Error('No NexaMap platform adapter is available.');
+  }
+  createNexaMapApp({
+    platform,
+    document: window.document,
+    window,
+  });
 });
 
 async function connectToWarehouse(mode, connStr, crs = 'EPSG:4326') {
