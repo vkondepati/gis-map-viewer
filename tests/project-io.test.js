@@ -47,3 +47,33 @@ test('serializeProjectLayer preserves ArcGIS REST metadata', () => {
   assert.deepEqual(serialized.serviceMetadata, { id: 2, name: 'Wildfire Response Polygons' });
   assert.equal(serialized.geojson, null);
 });
+
+test('serializeProjectLayer merges default label options when labels exist', () => {
+  const layerEntry = {
+    id: 'layer-3',
+    name: 'Parcels',
+    visible: true,
+    geometryType: 'Polygon',
+    sourcePath: null,
+    sourceType: 'geojson',
+    geojson: { type: 'FeatureCollection', features: [] },
+  };
+  const serialized = serializeProjectLayer(layerEntry, {
+    layerSym: {},
+    layerLabels: {
+      'layer-3': {
+        columnName: 'parcel_id',
+        enabled: true,
+        options: { color: '#112233' },
+      },
+    },
+    getDefaultSymbology: () => ({ color: '#ff7800' }),
+    labelStyleDefaults: { fontSize: 12, color: '#000000', placement: 'center' },
+  });
+
+  assert.deepEqual(serialized.labels, {
+    columnName: 'parcel_id',
+    enabled: true,
+    options: { fontSize: 12, color: '#112233', placement: 'center' },
+  });
+});

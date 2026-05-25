@@ -189,6 +189,7 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       getApiBaseUrl,
+      createWebPlatform: root.NexaMapPlatforms.web,
     };
   }
 })(typeof window !== 'undefined' ? window : globalThis);
