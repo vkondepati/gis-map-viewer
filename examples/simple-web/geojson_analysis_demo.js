@@ -1,7 +1,7 @@
 /**
  * NexaMap Open Source GIS Platform
  * Issue #43: Beginner-friendly Backend GIS Sample Workflow
- * * This script demonstrates how to read a GeoJSON object, validate its structure,
+ * This script demonstrates how to read a GeoJSON object, validate its structure,
  * and extract basic spatial metadata (Feature Count, Geometry Types, and Bounding Box).
  */
 
@@ -35,9 +35,16 @@ const sampleGeoJSON = {
 function analyzeGeoJSON(data) {
     console.log("🌍 Starting Geospatial Data Analysis Workflow...\n");
 
+    // Default metadata template to return if validation fails
+    const defaultMetadata = {
+        totalFeatures: 0,
+        geometryTypes: [],
+        bbox: [0, 0, 0, 0]
+    };
+
     if (!data || data.type !== "FeatureCollection" || !Array.isArray(data.features)) {
         console.error("❌ Invalid GeoJSON: Must be a FeatureCollection.");
-        return;
+        return defaultMetadata;
     }
 
     const totalFeatures = data.features.length;
@@ -46,6 +53,7 @@ function analyzeGeoJSON(data) {
     // Variables to calculate the Bounding Box (BBOX) [minLng, minLat, maxLng, maxLat]
     let minLng = Infinity, minLat = Infinity;
     let maxLng = -Infinity, maxLat = -Infinity;
+    let hasValidCoordinates = false;
 
     data.features.forEach((feature) => {
         // Track unique geometry types
@@ -61,6 +69,7 @@ function analyzeGeoJSON(data) {
                 if (lat < minLat) minLat = lat;
                 if (lng > maxLng) maxLng = lng;
                 if (lat > maxLat) maxLat = lat;
+                hasValidCoordinates = true;
             } else {
                 coords.forEach(processCoords);
             }
@@ -71,12 +80,26 @@ function analyzeGeoJSON(data) {
         }
     });
 
+    // Guard: check if we actually found coordinates to avoid [Infinity, Infinity, -Infinity, -Infinity] (Fix #4)
+    const bbox = hasValidCoordinates 
+        ? [minLng, minLat, maxLng, maxLat] 
+        : [0, 0, 0, 0];
+
+    const geometryTypesArray = Array.from(geometryTypes);
+
     // 3. Display the Results
     console.log("📊 Spatial Metadata Summary:");
     console.log(`🔹 Total Features Found: ${totalFeatures}`);
-    console.log(`🔹 Geometry Types Present: ${Array.from(geometryTypes).join(', ')}`);
-    console.log(`🔹 Calculated Bounding Box (BBOX): [${minLng}, ${minLat}, ${maxLng}, ${maxLat}]`);
+    console.log(`🔹 Geometry Types Present: ${geometryTypesArray.join(', ')}`);
+    console.log(`🔹 Calculated Bounding Box (BBOX): [${bbox.join(', ')}]`);
     console.log("\n💡 Why BBOX matters: The frontend uses this bounding box to instantly auto-zoom and center the map on the loaded data.");
+
+    // 4. Return the metadata object so APIs or test scripts can use it (Fix #3)
+    return {
+        totalFeatures: totalFeatures,
+        geometryTypes: geometryTypesArray,
+        bbox: bbox
+    };
 }
 
 // Run the script
